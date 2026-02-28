@@ -17,9 +17,17 @@ export default function Dashboard() {
   const [showReport, setShowReport] = useState(false);
 
   useEffect(() => {
-    const file = (location.state as { file?: File })?.file;
-    if (file) {
-      analyze(file);
+    const state = location.state as { file?: File; demoPreset?: "authentic" | "synthetic" } | null;
+    if (state?.demoPreset) {
+      // Set demo mode before analyzing
+      if (state.demoPreset === "synthetic" && demoMode === "authentic") {
+        toggleDemoMode();
+      } else if (state.demoPreset === "authentic" && demoMode === "synthetic") {
+        toggleDemoMode();
+      }
+    }
+    if (state?.file) {
+      analyze(state.file);
     }
   }, []);
 
