@@ -1,6 +1,7 @@
-import { Shield, Fingerprint, ShieldCheck, FileText } from "lucide-react";
+import { Shield, Fingerprint, ShieldCheck, FileText, Play } from "lucide-react";
 import { UploadZone } from "@/components/UploadZone";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const features = [
   {
