@@ -1,6 +1,7 @@
-import { Shield, Fingerprint, ShieldCheck, FileText } from "lucide-react";
+import { Shield, Fingerprint, ShieldCheck, FileText, Play } from "lucide-react";
 import { UploadZone } from "@/components/UploadZone";
 import { useNavigate } from "react-router-dom";
+import { Button } from "@/components/ui/button";
 
 const features = [
   {
@@ -24,9 +25,14 @@ const Index = () => {
   const navigate = useNavigate();
 
   const handleFileSelect = (file: File) => {
-    // Store file reference and navigate to dashboard
     sessionStorage.setItem("audioFile", JSON.stringify({ name: file.name, size: file.size, type: file.type }));
     navigate("/dashboard", { state: { file } });
+  };
+
+  const loadDemoSample = (type: "authentic" | "synthetic") => {
+    const name = type === "authentic" ? "witness-deposition-2024.wav" : "ai-generated-clone.wav";
+    const file = new File([new ArrayBuffer(48000)], name, { type: "audio/wav" });
+    navigate("/dashboard", { state: { file, demoPreset: type } });
   };
 
   return (
@@ -54,6 +60,27 @@ const Index = () => {
         {/* Upload Zone */}
         <div className="mx-auto max-w-lg">
           <UploadZone onFileSelect={handleFileSelect} />
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <span className="font-mono text-xs text-muted-foreground">Or try a demo:</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-accent/30 text-accent hover:bg-accent/10"
+              onClick={() => loadDemoSample("authentic")}
+            >
+              <Play className="h-3 w-3" />
+              Authentic Sample
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+              onClick={() => loadDemoSample("synthetic")}
+            >
+              <Play className="h-3 w-3" />
+              Synthetic Sample
+            </Button>
+          </div>
         </div>
       </div>
 
