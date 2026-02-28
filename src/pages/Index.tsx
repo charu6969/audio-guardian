@@ -25,9 +25,14 @@ const Index = () => {
   const navigate = useNavigate();
 
   const handleFileSelect = (file: File) => {
-    // Store file reference and navigate to dashboard
     sessionStorage.setItem("audioFile", JSON.stringify({ name: file.name, size: file.size, type: file.type }));
     navigate("/dashboard", { state: { file } });
+  };
+
+  const loadDemoSample = (type: "authentic" | "synthetic") => {
+    const name = type === "authentic" ? "witness-deposition-2024.wav" : "ai-generated-clone.wav";
+    const file = new File([new ArrayBuffer(48000)], name, { type: "audio/wav" });
+    navigate("/dashboard", { state: { file, demoPreset: type } });
   };
 
   return (
