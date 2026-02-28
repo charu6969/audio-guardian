@@ -60,6 +60,27 @@ const Index = () => {
         {/* Upload Zone */}
         <div className="mx-auto max-w-lg">
           <UploadZone onFileSelect={handleFileSelect} />
+          <div className="mt-4 flex items-center justify-center gap-3">
+            <span className="font-mono text-xs text-muted-foreground">Or try a demo:</span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-accent/30 text-accent hover:bg-accent/10"
+              onClick={() => loadDemoSample("authentic")}
+            >
+              <Play className="h-3 w-3" />
+              Authentic Sample
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
+              onClick={() => loadDemoSample("synthetic")}
+            >
+              <Play className="h-3 w-3" />
+              Synthetic Sample
+            </Button>
+          </div>
         </div>
       </div>
 
