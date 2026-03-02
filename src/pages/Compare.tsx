@@ -1,42 +1,65 @@
 import { useState } from "react";
 import { UploadZone } from "@/components/UploadZone";
-import { useAnalysis, type AnalysisResult } from "@/hooks/useAnalysis";
 import { Loader2, ArrowLeftRight } from "lucide-react";
+import { compareAudio, type CompareResult } from "@/lib/audioNotaryApi";
 
 export default function Compare() {
-  const refAnalysis = useAnalysis();
-  const disputedAnalysis = useAnalysis();
   const [refFile, setRefFile] = useState<File | null>(null);
   const [disputedFile, setDisputedFile] = useState<File | null>(null);
+  const [isComparing, setIsComparing] = useState(false);
+  const [compareResult, setCompareResult] = useState<CompareResult | null>(
+    null,
+  );
+  const [error, setError] = useState<string | null>(null);
 
-  const bothDone = refAnalysis.result && disputedAnalysis.result;
+  const handleCompare = async (ref: File, disputed: File) => {
+    setIsComparing(true);
+    setError(null);
+    setCompareResult(null);
+    try {
+      const result = await compareAudio(ref, disputed);
+      setCompareResult(result);
+    } catch (err: any) {
+      setError(err.message || "Comparison failed");
+    } finally {
+      setIsComparing(false);
+    }
+  };
 
-  const similarityScore = bothDone
-    ? Math.round(
-        Math.abs(
-          100 -
-            Math.abs(refAnalysis.result!.overallScore - disputedAnalysis.result!.overallScore) * 1.5 -
-            Math.random() * 10
-        )
-      )
-    : 0;
+  const handleRefSelect = (f: File) => {
+    setRefFile(f);
+    setCompareResult(null);
+    if (disputedFile) handleCompare(f, disputedFile);
+  };
 
-  const verdict =
-    similarityScore > 80
-      ? "HIGH MATCH — Likely Same Speaker"
-      : similarityScore > 50
-      ? "PARTIAL MATCH — Requires Further Review"
-      : "LOW MATCH — Likely Different Source";
+  const handleDisputedSelect = (f: File) => {
+    setDisputedFile(f);
+    setCompareResult(null);
+    if (refFile) handleCompare(refFile, f);
+  };
 
+  // Verdict color from real API risk level
   const verdictColor =
-    similarityScore > 80 ? "text-accent" : similarityScore > 50 ? "text-warning" : "text-destructive";
+    compareResult?.risk_level === "HIGH"
+      ? "text-destructive"
+      : compareResult?.risk_level === "MEDIUM"
+        ? "text-warning"
+        : "text-accent";
+
+  // ML layer sub-metric detail from disputed file analysis
+  const mlDetail =
+    compareResult?.disputed_file_ml_analysis?.sub_metrics?.deepfake_classifier
+      ?.detail;
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
       <div className="mb-8 text-center">
-        <h1 className="mb-2 text-2xl font-bold text-foreground">Voice Clone Detection</h1>
+        <h1 className="mb-2 text-2xl font-bold text-foreground">
+          Voice Clone Detection
+        </h1>
         <p className="text-sm text-muted-foreground">
-          Compare a reference audio (known authentic) against a disputed audio to detect synthetic cloning.
+          Compare a reference audio (known authentic) against a disputed audio
+          to detect synthetic cloning.
         </p>
       </div>
 
@@ -46,38 +69,20 @@ export default function Compare() {
           <h3 className="mb-3 font-mono text-xs font-bold uppercase tracking-wider text-accent">
             Reference Audio (Known Authentic)
           </h3>
-          {refFile && refAnalysis.result ? (
+          {refFile ? (
             <div className="space-y-2">
-              <p className="font-mono text-sm text-foreground">{refFile.name}</p>
-              <p className="font-mono text-xs text-muted-foreground">
-                Trust Score: {refAnalysis.result.overallScore}/100
+              <p className="font-mono text-sm text-foreground">
+                {refFile.name}
               </p>
-              {refAnalysis.result.layers.map((l) => (
-                <div key={l.id} className="flex items-center gap-2">
-                  <span className="text-sm">{l.icon}</span>
-                  <div className="h-1.5 flex-1 rounded-full bg-secondary">
-                    <div
-                      className="h-full rounded-full bg-accent score-bar-fill"
-                      style={{ width: `${l.score}%` }}
-                    />
-                  </div>
-                  <span className="font-mono text-xs text-muted-foreground">{l.score}</span>
-                </div>
-              ))}
-            </div>
-          ) : refAnalysis.isAnalyzing ? (
-            <div className="flex items-center gap-2 py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <span className="font-mono text-xs text-primary">{refAnalysis.analysisStep}</span>
+              <p className="font-mono text-xs text-muted-foreground">
+                {(refFile.size / 1024).toFixed(1)} KB · Loaded ✓
+              </p>
             </div>
           ) : (
             <UploadZone
               compact
               label="Drop reference audio"
-              onFileSelect={(f) => {
-                setRefFile(f);
-                refAnalysis.analyze(f);
-              }}
+              onFileSelect={handleRefSelect}
             />
           )}
         </div>
@@ -87,54 +92,145 @@ export default function Compare() {
           <h3 className="mb-3 font-mono text-xs font-bold uppercase tracking-wider text-destructive">
             Disputed Audio (Under Investigation)
           </h3>
-          {disputedFile && disputedAnalysis.result ? (
+          {disputedFile ? (
             <div className="space-y-2">
-              <p className="font-mono text-sm text-foreground">{disputedFile.name}</p>
-              <p className="font-mono text-xs text-muted-foreground">
-                Trust Score: {disputedAnalysis.result.overallScore}/100
+              <p className="font-mono text-sm text-foreground">
+                {disputedFile.name}
               </p>
-              {disputedAnalysis.result.layers.map((l) => (
-                <div key={l.id} className="flex items-center gap-2">
-                  <span className="text-sm">{l.icon}</span>
-                  <div className="h-1.5 flex-1 rounded-full bg-secondary">
-                    <div
-                      className={`h-full rounded-full score-bar-fill ${
-                        l.score >= 75 ? "bg-accent" : l.score >= 50 ? "bg-warning" : "bg-destructive"
-                      }`}
-                      style={{ width: `${l.score}%` }}
-                    />
-                  </div>
-                  <span className="font-mono text-xs text-muted-foreground">{l.score}</span>
-                </div>
-              ))}
-            </div>
-          ) : disputedAnalysis.isAnalyzing ? (
-            <div className="flex items-center gap-2 py-8">
-              <Loader2 className="h-5 w-5 animate-spin text-primary" />
-              <span className="font-mono text-xs text-primary">{disputedAnalysis.analysisStep}</span>
+              <p className="font-mono text-xs text-muted-foreground">
+                {(disputedFile.size / 1024).toFixed(1)} KB · Loaded ✓
+              </p>
             </div>
           ) : (
             <UploadZone
               compact
               label="Drop disputed audio"
-              onFileSelect={(f) => {
-                setDisputedFile(f);
-                disputedAnalysis.analyze(f);
-              }}
+              onFileSelect={handleDisputedSelect}
             />
           )}
         </div>
       </div>
 
-      {/* Comparison Result */}
-      {bothDone && (
-        <div className="mt-8 animate-fade-slide-in forensic-card text-center">
-          <ArrowLeftRight className="mx-auto mb-3 h-8 w-8 text-primary" />
-          <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-            Voice Print Similarity
+      {/* Loading state */}
+      {isComparing && (
+        <div className="mt-8 forensic-card flex items-center justify-center gap-3 py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+          <span className="font-mono text-sm text-primary">
+            Running voice fingerprint comparison...
+          </span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div className="mt-8 forensic-card border-l-4 border-l-destructive">
+          <p className="font-mono text-sm text-destructive">⚠ {error}</p>
+          <p className="mt-1 text-xs text-muted-foreground">
+            Make sure the backend is running on port 8001 and both files are
+            valid audio.
           </p>
-          <p className="mb-2 font-mono text-4xl font-bold text-foreground">{similarityScore}%</p>
-          <p className={`font-mono text-sm font-bold ${verdictColor}`}>{verdict}</p>
+        </div>
+      )}
+
+      {/* Real comparison result */}
+      {compareResult && !isComparing && (
+        <div className="mt-8 animate-fade-slide-in space-y-4">
+          {/* Main similarity score */}
+          <div className="forensic-card text-center">
+            <ArrowLeftRight className="mx-auto mb-3 h-8 w-8 text-primary" />
+            <p className="mb-1 text-xs font-medium uppercase tracking-wider text-muted-foreground">
+              Voice Print Similarity
+            </p>
+            <p className="mb-2 font-mono text-5xl font-bold text-foreground">
+              {compareResult.voice_similarity_score}%
+            </p>
+            <p className={`font-mono text-sm font-bold ${verdictColor}`}>
+              {compareResult.clone_verdict}
+            </p>
+
+            {/* Risk badge */}
+            <span
+              className={`mt-3 inline-flex items-center rounded-full border px-3 py-1 font-mono text-xs font-semibold
+                ${
+                  compareResult.risk_level === "HIGH"
+                    ? "border-destructive text-destructive"
+                    : compareResult.risk_level === "MEDIUM"
+                      ? "border-warning text-warning"
+                      : "border-accent text-accent"
+                }`}
+            >
+              Risk Level: {compareResult.risk_level}
+            </span>
+          </div>
+
+          {/* ML classifier result on disputed file */}
+          {compareResult.disputed_file_ml_analysis && (
+            <div className="forensic-card border-l-4 border-l-primary">
+              <h4 className="mb-2 font-mono text-xs font-bold uppercase tracking-wider text-primary">
+                🤖 ML Deepfake Classifier — Disputed File
+              </h4>
+              <div className="flex items-center gap-4">
+                <div>
+                  <p className="font-mono text-2xl font-bold text-foreground">
+                    {compareResult.disputed_file_ml_analysis.score}
+                    <span className="text-sm text-muted-foreground">/100</span>
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Authenticity Score
+                  </p>
+                </div>
+                <div className="flex-1">
+                  <div className="h-2 w-full rounded-full bg-secondary">
+                    <div
+                      className={`h-full rounded-full transition-all duration-700 ${
+                        compareResult.disputed_file_ml_analysis.score >= 70
+                          ? "bg-accent"
+                          : compareResult.disputed_file_ml_analysis.score >= 45
+                            ? "bg-warning"
+                            : "bg-destructive"
+                      }`}
+                      style={{
+                        width: `${compareResult.disputed_file_ml_analysis.score}%`,
+                      }}
+                    />
+                  </div>
+                  {mlDetail && (
+                    <p className="mt-1 font-mono text-xs text-muted-foreground">
+                      {mlDetail}
+                    </p>
+                  )}
+                </div>
+                <span
+                  className={`inline-flex items-center rounded-full border px-2 py-0.5 font-mono text-xs font-semibold
+                    ${
+                      compareResult.disputed_file_ml_analysis.status === "PASS"
+                        ? "status-pass"
+                        : compareResult.disputed_file_ml_analysis.status ===
+                            "FAIL"
+                          ? "status-fail"
+                          : "status-warning"
+                    }`}
+                >
+                  {compareResult.disputed_file_ml_analysis.status}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Reset button */}
+          <div className="text-center">
+            <button
+              onClick={() => {
+                setRefFile(null);
+                setDisputedFile(null);
+                setCompareResult(null);
+                setError(null);
+              }}
+              className="rounded border border-border px-4 py-2 font-mono text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              Run New Comparison
+            </button>
+          </div>
         </div>
       )}
     </div>

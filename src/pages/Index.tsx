@@ -1,23 +1,25 @@
-import { Shield, Fingerprint, ShieldCheck, FileText, Play } from "lucide-react";
+import { Shield, Fingerprint, ShieldCheck, FileText } from "lucide-react";
 import { UploadZone } from "@/components/UploadZone";
 import { useNavigate } from "react-router-dom";
-import { Button } from "@/components/ui/button";
 
 const features = [
   {
     icon: Fingerprint,
     title: "Biological Signature Analysis",
-    description: "Detect micro-tremors, glottal pulses, and sub-glottal resonance patterns unique to human speech.",
+    description:
+      "Detect micro-tremors, glottal pulses, and sub-glottal resonance patterns unique to human speech.",
   },
   {
     icon: ShieldCheck,
     title: "Digital Integrity Check",
-    description: "Verify metadata consistency, encoding artifacts, and compression fingerprints for tampering evidence.",
+    description:
+      "Verify metadata consistency, encoding artifacts, and compression fingerprints for tampering evidence.",
   },
   {
     icon: FileText,
     title: "Forensic Report Generation",
-    description: "Generate legal-grade forensic certificates with chain of custody documentation and anomaly timelines.",
+    description:
+      "Generate legal-grade forensic certificates with chain of custody documentation and anomaly timelines.",
   },
 ];
 
@@ -25,14 +27,7 @@ const Index = () => {
   const navigate = useNavigate();
 
   const handleFileSelect = (file: File) => {
-    sessionStorage.setItem("audioFile", JSON.stringify({ name: file.name, size: file.size, type: file.type }));
     navigate("/dashboard", { state: { file } });
-  };
-
-  const loadDemoSample = (type: "authentic" | "synthetic") => {
-    const name = type === "authentic" ? "witness-deposition-2024.wav" : "ai-generated-clone.wav";
-    const file = new File([new ArrayBuffer(48000)], name, { type: "audio/wav" });
-    navigate("/dashboard", { state: { file, demoPreset: type } });
   };
 
   return (
@@ -41,7 +36,9 @@ const Index = () => {
       <div className="mx-auto max-w-3xl text-center">
         <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-primary/20 bg-primary/5 px-4 py-1.5">
           <Shield className="h-4 w-4 text-primary" />
-          <span className="font-mono text-xs text-primary">FORENSIC AUDIO ANALYSIS TOOLKIT</span>
+          <span className="font-mono text-xs text-primary">
+            FORENSIC AUDIO ANALYSIS TOOLKIT
+          </span>
         </div>
 
         <h1 className="mb-4 text-4xl font-extrabold tracking-tight text-foreground sm:text-5xl lg:text-6xl">
@@ -53,44 +50,34 @@ const Index = () => {
         </p>
 
         <p className="mx-auto mb-10 max-w-xl text-sm text-muted-foreground sm:text-base">
-          Multi-layer forensic trust analysis for voice authentication, deepfake detection,
-          and legal-grade audio verification.
+          Multi-layer forensic trust analysis for voice authentication, deepfake
+          detection, and legal-grade audio verification.
         </p>
 
         {/* Upload Zone */}
         <div className="mx-auto max-w-lg">
           <UploadZone onFileSelect={handleFileSelect} />
-          <div className="mt-4 flex items-center justify-center gap-3">
-            <span className="font-mono text-xs text-muted-foreground">Or try a demo:</span>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-accent/30 text-accent hover:bg-accent/10"
-              onClick={() => loadDemoSample("authentic")}
-            >
-              <Play className="h-3 w-3" />
-              Authentic Sample
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="gap-1.5 border-destructive/30 text-destructive hover:bg-destructive/10"
-              onClick={() => loadDemoSample("synthetic")}
-            >
-              <Play className="h-3 w-3" />
-              Synthetic Sample
-            </Button>
-          </div>
+          <p className="mt-3 font-mono text-xs text-muted-foreground">
+            Supported formats: .mp3 · .wav · .flac · .m4a · .ogg · .aac · Max
+            50MB
+          </p>
         </div>
       </div>
 
       {/* Feature Cards */}
       <div className="mx-auto mt-16 grid max-w-4xl grid-cols-1 gap-6 sm:grid-cols-3">
         {features.map((feature) => (
-          <div key={feature.title} className="forensic-card group transition-all duration-300 hover:border-primary/30">
+          <div
+            key={feature.title}
+            className="forensic-card group transition-all duration-300 hover:border-primary/30"
+          >
             <feature.icon className="mb-3 h-8 w-8 text-primary transition-transform duration-300 group-hover:scale-110" />
-            <h3 className="mb-1.5 text-sm font-semibold text-foreground">{feature.title}</h3>
-            <p className="text-xs leading-relaxed text-muted-foreground">{feature.description}</p>
+            <h3 className="mb-1.5 text-sm font-semibold text-foreground">
+              {feature.title}
+            </h3>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {feature.description}
+            </p>
           </div>
         ))}
       </div>
@@ -98,7 +85,8 @@ const Index = () => {
       {/* Bottom line */}
       <div className="mt-16 text-center">
         <p className="font-mono text-xs text-muted-foreground">
-          AudioNotary v1.0 — Clinical forensic analysis powered by multi-layer trust verification
+          AudioNotary v1.0 — Clinical forensic analysis powered by multi-layer
+          trust verification
         </p>
       </div>
     </main>

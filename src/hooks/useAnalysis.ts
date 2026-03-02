@@ -1,4 +1,12 @@
 import { useState, useCallback } from "react";
+import {
+  analyzeAudio,
+  downloadReport,
+  type AnalysisResult as ApiResult,
+  type ForensicLayer,
+} from "@/lib/audioNotaryApi";
+
+// ── Types (kept compatible with existing components) ──────────────────────────
 
 export interface FileInfo {
   name: string;
@@ -13,6 +21,7 @@ export interface FileInfo {
 export interface SubMetric {
   name: string;
   score: number;
+  anomaly?: boolean;
 }
 
 export interface TrustLayer {
@@ -22,6 +31,7 @@ export interface TrustLayer {
   score: number;
   status: "PASS" | "FAIL" | "SUSPICIOUS";
   subMetrics: SubMetric[];
+  rawLayer?: ForensicLayer; // full API layer attached for TrustLayerCard
 }
 
 export interface Anomaly {
@@ -34,100 +44,91 @@ export interface AnalysisResult {
   fileInfo: FileInfo;
   layers: TrustLayer[];
   overallScore: number;
-  verdict: "AUTHENTIC" | "SUSPICIOUS" | "LIKELY SYNTHETIC";
+  verdict: string;
   anomalies: Anomaly[];
   caseId: string;
+  // Real extras from API
+  spectrogramB64?: string | null;
+  waveformEnvelope?: number[];
+  frequencyBands?: Record<string, number>;
+  rawApiResult?: ApiResult; // full API response kept for PDF report generation
 }
 
-function randomBetween(min: number, max: number) {
-  return Math.floor(Math.random() * (max - min + 1)) + min;
-}
+// ── Icon map ──────────────────────────────────────────────────────────────────
 
-function generateHash(): string {
-  const chars = "0123456789abcdef";
-  return Array.from({ length: 64 }, () => chars[Math.floor(Math.random() * 16)]).join("");
-}
+const LAYER_ICONS: Record<string, string> = {
+  "Biological Signature": "🧬",
+  "Digital Integrity": "🔒",
+  "Environmental Consistency": "🏠",
+  "Temporal Coherence": "⏱️",
+  "Cross-Modal Fingerprint": "🔗",
+  "ML Deepfake Classifier": "🤖",
+};
 
-function generateUUID(): string {
-  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === "x" ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
+// ── Adapter: convert API response → AnalysisResult shape ─────────────────────
 
-function getStatus(score: number): "PASS" | "FAIL" | "SUSPICIOUS" {
-  if (score >= 75) return "PASS";
-  if (score >= 50) return "SUSPICIOUS";
-  return "FAIL";
-}
+function adaptApiResult(api: ApiResult, file: File): AnalysisResult {
+  const meta = api.file_metadata;
+  const viz = api.visualization;
 
-function generateAuthenticData(): Omit<AnalysisResult, "fileInfo" | "caseId"> {
-  const layerDefs = [
-    { icon: "🧬", name: "Biological Signature", subs: ["Micro-tremor Detection", "Glottal Pulse Irregularity", "Sub-glottal Resonance"] },
-    { icon: "🔒", name: "Digital Integrity", subs: ["Metadata Consistency", "Encoding Artifacts", "Compression Fingerprint"] },
-    { icon: "🏠", name: "Environmental Consistency", subs: ["Room Impulse Response Stability", "Background Noise Uniformity", "Acoustic Signature Match"] },
-    { icon: "⏱️", name: "Temporal Coherence", subs: ["Breathing Pattern Analysis", "Pause Distribution", "Prosody Naturalness"] },
-    { icon: "🔗", name: "Cross-Modal Fingerprint", subs: ["Noise Floor Consistency", "Splice Detection", "Dynamic Range Integrity"] },
-  ];
+  const fileInfo: FileInfo = {
+    name: meta.filename,
+    size: meta.file_size_bytes,
+    duration: meta.duration_sec,
+    format: meta.format,
+    sampleRate: meta.sample_rate,
+    uploadTimestamp: new Date(),
+    sha256: meta.file_hash,
+  };
 
-  const layers: TrustLayer[] = layerDefs.map((def, i) => {
-    const score = randomBetween(72, 96);
+  // Map API layers → TrustLayer[]
+  const layers: TrustLayer[] = api.layers.map((l, i) => {
+    const subMetrics: SubMetric[] = Object.entries(l.sub_metrics ?? {}).map(
+      ([key, val]) => ({
+        name: key.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+        score: val.score ?? 0,
+        anomaly: val.anomaly ?? false,
+      }),
+    );
+
     return {
       id: i + 1,
-      icon: def.icon,
-      name: def.name,
-      score,
-      status: getStatus(score),
-      subMetrics: def.subs.map((name) => ({ name, score: randomBetween(68, 98) })),
+      icon: LAYER_ICONS[l.layer] ?? "🔍",
+      name: l.layer,
+      score: l.score,
+      status: l.status,
+      subMetrics,
+      rawLayer: l,
     };
   });
 
-  const overallScore = Math.round(layers.reduce((sum, l) => sum + l.score, 0) / layers.length);
+  // Map API anomaly markers → Anomaly[]
+  const anomalies: Anomaly[] = (viz.anomaly_markers ?? []).map((m) => ({
+    timestamp: m.time_sec,
+    severity:
+      m.severity === "high"
+        ? "suspicious"
+        : m.severity === "medium"
+          ? "warning"
+          : "clean",
+    label: m.label,
+  }));
 
-  const anomalies: Anomaly[] = [
-    { timestamp: 2.3, severity: "clean", label: "Clean segment verified" },
-    { timestamp: 5.1, severity: "warning", label: "Minor background shift" },
-    { timestamp: 8.7, severity: "clean", label: "Natural pause pattern" },
-    { timestamp: 12.4, severity: "clean", label: "Consistent vocal signature" },
-  ];
-
-  return { layers, overallScore, verdict: "AUTHENTIC", anomalies };
+  return {
+    fileInfo,
+    layers,
+    overallScore: api.trust_score,
+    verdict: api.verdict,
+    anomalies,
+    caseId: crypto.randomUUID(),
+    spectrogramB64: viz.spectrogram_b64,
+    waveformEnvelope: viz.waveform_envelope,
+    frequencyBands: viz.frequency_bands as Record<string, number>,
+    rawApiResult: api,
+  };
 }
 
-function generateSyntheticData(): Omit<AnalysisResult, "fileInfo" | "caseId"> {
-  const layerDefs = [
-    { icon: "🧬", name: "Biological Signature", subs: ["Micro-tremor Detection", "Glottal Pulse Irregularity", "Sub-glottal Resonance"] },
-    { icon: "🔒", name: "Digital Integrity", subs: ["Metadata Consistency", "Encoding Artifacts", "Compression Fingerprint"] },
-    { icon: "🏠", name: "Environmental Consistency", subs: ["Room Impulse Response Stability", "Background Noise Uniformity", "Acoustic Signature Match"] },
-    { icon: "⏱️", name: "Temporal Coherence", subs: ["Breathing Pattern Analysis", "Pause Distribution", "Prosody Naturalness"] },
-    { icon: "🔗", name: "Cross-Modal Fingerprint", subs: ["Noise Floor Consistency", "Splice Detection", "Dynamic Range Integrity"] },
-  ];
-
-  const layers: TrustLayer[] = layerDefs.map((def, i) => {
-    const score = randomBetween(15, 48);
-    return {
-      id: i + 1,
-      icon: def.icon,
-      name: def.name,
-      score,
-      status: getStatus(score),
-      subMetrics: def.subs.map((name) => ({ name, score: randomBetween(10, 55) })),
-    };
-  });
-
-  const overallScore = Math.round(layers.reduce((sum, l) => sum + l.score, 0) / layers.length);
-
-  const anomalies: Anomaly[] = [
-    { timestamp: 1.2, severity: "suspicious", label: "Noise floor shift detected" },
-    { timestamp: 3.8, severity: "suspicious", label: "Unnatural pause gap" },
-    { timestamp: 6.5, severity: "warning", label: "Compression artifact anomaly" },
-    { timestamp: 9.1, severity: "suspicious", label: "Splice boundary detected" },
-    { timestamp: 11.3, severity: "suspicious", label: "Missing micro-tremor pattern" },
-  ];
-
-  return { layers, overallScore, verdict: "LIKELY SYNTHETIC", anomalies };
-}
+// ── Analysis steps shown in UI while waiting ──────────────────────────────────
 
 const ANALYSIS_STEPS = [
   "Extracting spectral features...",
@@ -135,55 +136,76 @@ const ANALYSIS_STEPS = [
   "Checking digital integrity...",
   "Analyzing environmental consistency...",
   "Evaluating temporal coherence...",
+  "Running ML deepfake classifier...",
   "Generating forensic report...",
 ];
+
+// ── Hook ──────────────────────────────────────────────────────────────────────
 
 export function useAnalysis() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analysisStep, setAnalysisStep] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
-  const [demoMode, setDemoMode] = useState<"authentic" | "synthetic">("authentic");
+  const [error, setError] = useState<string | null>(null);
 
-  const analyze = useCallback(
-    (file: File) => {
-      setIsAnalyzing(true);
-      setResult(null);
+  const analyze = useCallback(async (file: File) => {
+    setIsAnalyzing(true);
+    setResult(null);
+    setError(null);
 
-      const fileInfo: FileInfo = {
-        name: file.name,
-        size: file.size,
-        duration: randomBetween(8, 45),
-        format: file.name.split(".").pop()?.toUpperCase() || "WAV",
-        sampleRate: [44100, 48000, 22050][randomBetween(0, 2)],
-        uploadTimestamp: new Date(),
-        sha256: generateHash(),
-      };
+    // Animate steps while API call runs in parallel
+    let stepIndex = 0;
+    const stepInterval = setInterval(() => {
+      if (stepIndex < ANALYSIS_STEPS.length - 1) {
+        setAnalysisStep(ANALYSIS_STEPS[stepIndex]);
+        stepIndex++;
+      }
+    }, 800);
 
-      let stepIndex = 0;
-      const interval = setInterval(() => {
-        if (stepIndex < ANALYSIS_STEPS.length) {
-          setAnalysisStep(ANALYSIS_STEPS[stepIndex]);
-          stepIndex++;
-        } else {
-          clearInterval(interval);
-          const data = demoMode === "authentic" ? generateAuthenticData() : generateSyntheticData();
-          setResult({ ...data, fileInfo, caseId: generateUUID() });
-          setIsAnalyzing(false);
-          setAnalysisStep("");
-        }
-      }, 600);
-    },
-    [demoMode]
-  );
+    try {
+      // Real API call
+      const apiResult = await analyzeAudio(file);
+      clearInterval(stepInterval);
+      setAnalysisStep("Analysis complete ✓");
 
-  const toggleDemoMode = useCallback(() => {
-    const newMode = demoMode === "authentic" ? "synthetic" : "authentic";
-    setDemoMode(newMode);
-    if (result) {
-      const data = newMode === "authentic" ? generateAuthenticData() : generateSyntheticData();
-      setResult({ ...data, fileInfo: result.fileInfo, caseId: result.caseId });
+      const adapted = adaptApiResult(apiResult, file);
+      setResult(adapted);
+    } catch (err: any) {
+      clearInterval(stepInterval);
+      setError(err.message || "Analysis failed — is the backend running?");
+      setAnalysisStep("");
+    } finally {
+      setIsAnalyzing(false);
     }
-  }, [demoMode, result]);
+  }, []);
 
-  return { isAnalyzing, analysisStep, result, demoMode, analyze, toggleDemoMode };
+  const generateReport = useCallback(async () => {
+    if (!result?.rawApiResult) return;
+    try {
+      await downloadReport(result.rawApiResult);
+    } catch (err: any) {
+      setError(err.message || "Report download failed");
+    }
+  }, [result]);
+
+  // Kept for UI toggle compatibility — re-runs analysis is not needed since
+  // the result is now real. This just clears result so user can re-upload.
+  const resetAnalysis = useCallback(() => {
+    setResult(null);
+    setError(null);
+    setAnalysisStep("");
+  }, []);
+
+  return {
+    isAnalyzing,
+    analysisStep,
+    result,
+    error,
+    analyze,
+    generateReport,
+    resetAnalysis,
+    // Legacy compat: toggleDemoMode is a no-op (real data doesn't need it)
+    demoMode: "authentic" as const,
+    toggleDemoMode: resetAnalysis,
+  };
 }
