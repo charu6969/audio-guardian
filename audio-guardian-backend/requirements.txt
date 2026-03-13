@@ -22,3 +22,11 @@ Pillow>=10.3.0
 transformers>=4.41.0
 torch>=2.3.0
 torchaudio>=2.3.0
+
+# ASR — Speech-to-Text for Social Engineering Detection (Layer 7)
+# Primary: SpeechRecognition (Google free API, lightweight, no model download)
+SpeechRecognition>=3.10.0
+
+# Optional: Whisper for offline/accurate transcription (uncomment if needed)
+# openai-whisper>=20231117
+

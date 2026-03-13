@@ -63,6 +63,7 @@ const LAYER_ICONS: Record<string, string> = {
   "Temporal Coherence": "⏱️",
   "Cross-Modal Fingerprint": "🔗",
   "ML Deepfake Classifier": "🤖",
+  "Social Engineering Detection": "🚨",
 };
 
 // ── Adapter: convert API response → AnalysisResult shape ─────────────────────
