@@ -103,13 +103,13 @@ export function NeuralNetworkViz({ activeLayer, className = "" }: NeuralNetworkV
 
         if (activation > 0.5) {
           const gradient = ctx.createLinearGradient(conn.from.x, conn.from.y, conn.to.x, conn.to.y);
-          gradient.addColorStop(0, `hsla(189, 100%, 50%, ${activation * 0.5})`);
-          gradient.addColorStop(0.5, `hsla(270, 100%, 65%, ${activation * 0.4})`);
-          gradient.addColorStop(1, `hsla(155, 100%, 50%, ${activation * 0.5})`);
+          gradient.addColorStop(0, `hsla(270, 90%, 65%, ${activation * 0.5})`);
+          gradient.addColorStop(0.5, `hsla(295, 95%, 60%, ${activation * 0.4})`);
+          gradient.addColorStop(1, `hsla(320, 90%, 60%, ${activation * 0.5})`);
           ctx.strokeStyle = gradient;
           ctx.lineWidth = 1.5 * activation;
         } else {
-          ctx.strokeStyle = `hsla(210, 30%, 40%, ${0.1 + activation * 0.2})`;
+          ctx.strokeStyle = `hsla(270, 30%, 70%, ${0.1 + activation * 0.2})`;
           ctx.lineWidth = 0.5;
         }
         ctx.stroke();
@@ -125,22 +125,37 @@ export function NeuralNetworkViz({ activeLayer, className = "" }: NeuralNetworkV
             const py = conn.from.y + (conn.to.y - conn.from.y) * t;
             ctx.beginPath();
             ctx.arc(px, py, 1.5, 0, Math.PI * 2);
-            ctx.fillStyle = `hsla(189, 100%, 70%, ${activation * 0.8})`;
+            ctx.fillStyle = `hsla(270, 95%, 75%, ${activation * 0.9})`;
+            ctx.fill();
+            
+            // Particle glow
+            const pGlow = ctx.createRadialGradient(px, py, 0, px, py, 6);
+            pGlow.addColorStop(0, `hsla(295, 95%, 65%, ${activation * 0.6})`);
+            pGlow.addColorStop(1, "transparent");
+            ctx.fillStyle = pGlow;
+            ctx.beginPath();
+            ctx.arc(px, py, 6, 0, Math.PI * 2);
             ctx.fill();
           }
         });
       }
 
+      // Helper to calculate hue for modern palette
+      const getLayerHue = (nodeLayer: number) => {
+        return nodeLayer <= 1 ? 270 : nodeLayer <= 3 ? 295 : 320;
+      };
+
       // Draw nodes
       nodes.forEach(node => {
+        const hue = getLayerHue(node.layer);
+        
         // Outer glow
         if (node.activation > 0.4) {
-          const glowGrad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius * 4);
-          const hue = node.layer <= 1 ? 189 : node.layer <= 3 ? 270 : 155;
-          glowGrad.addColorStop(0, `hsla(${hue}, 100%, 60%, ${node.activation * 0.3})`);
+          const glowGrad = ctx.createRadialGradient(node.x, node.y, 0, node.x, node.y, node.radius * 5);
+          glowGrad.addColorStop(0, `hsla(${hue}, 90%, 65%, ${node.activation * 0.4})`);
           glowGrad.addColorStop(1, "transparent");
           ctx.beginPath();
-          ctx.arc(node.x, node.y, node.radius * 4, 0, Math.PI * 2);
+          ctx.arc(node.x, node.y, node.radius * 5, 0, Math.PI * 2);
           ctx.fillStyle = glowGrad;
           ctx.fill();
         }
@@ -148,15 +163,14 @@ export function NeuralNetworkViz({ activeLayer, className = "" }: NeuralNetworkV
         // Node body
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-        const hue = node.layer <= 1 ? 189 : node.layer <= 3 ? 270 : 155;
-        ctx.fillStyle = `hsla(${hue}, 100%, ${50 + node.activation * 20}%, ${0.3 + node.activation * 0.7})`;
+        ctx.fillStyle = `hsla(${hue}, 95%, ${45 + node.activation * 30}%, ${0.5 + node.activation * 0.5})`;
         ctx.fill();
 
         // Node border
         ctx.beginPath();
         ctx.arc(node.x, node.y, node.radius, 0, Math.PI * 2);
-        ctx.strokeStyle = `hsla(${hue}, 100%, 70%, ${node.activation * 0.6})`;
-        ctx.lineWidth = 1;
+        ctx.strokeStyle = `hsla(${hue}, 90%, 65%, ${0.4 + node.activation * 0.6})`;
+        ctx.lineWidth = 1.5;
         ctx.stroke();
       });
 

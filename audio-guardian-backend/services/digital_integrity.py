@@ -99,6 +99,11 @@ def analyze_encoding_artifacts(y: np.ndarray, sr: int) -> dict:
     Heavily compressed or re-encoded audio shows characteristic spectral patterns.
     """
     try:
+        # Optimization: Only process first 10 seconds for artifacts to save time
+        max_samples = sr * 10
+        if len(y) > max_samples:
+            y = y[:max_samples]
+
         # Spectral flatness: ratio of geometric mean to arithmetic mean of spectrum
         # High flatness = noise-like (possible quantization noise from re-encoding)
         flatness = librosa.feature.spectral_flatness(y=y)[0]
@@ -149,6 +154,11 @@ def analyze_compression_fingerprint(y: np.ndarray, sr: int) -> dict:
     characteristic MFCC coefficient distribution anomalies.
     """
     try:
+        # Optimization: Only process first 10 seconds
+        max_samples = sr * 10
+        if len(y) > max_samples:
+            y = y[:max_samples]
+
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
 
         # Check kurtosis of MFCC coefficients

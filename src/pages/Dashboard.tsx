@@ -91,11 +91,11 @@ export default function Dashboard() {
   // Build radar scores from result
   const radarScores = result
     ? {
-        biological: result.layers.find(l => l.name.includes("Biological"))?.score || 0,
-        integrity: result.layers.find(l => l.name.includes("Digital"))?.score || 0,
-        environment: result.layers.find(l => l.name.includes("Environmental"))?.score || 0,
-        temporal: result.layers.find(l => l.name.includes("Temporal"))?.score || 0,
-        deepfake: result.layers.find(l => l.name.includes("Deepfake"))?.score || 0,
+        biological: result.layers.find(l => l.name.includes("Biological"))?.score || 50,
+        integrity: result.layers.find(l => l.name.includes("Digital"))?.score || 50,
+        environment: result.layers.find(l => l.name.includes("Environmental"))?.score || 50,
+        temporal: result.layers.find(l => l.name.includes("Temporal"))?.score || 50,
+        deepfake: result.layers.find(l => l.name.includes("Deepfake"))?.score || 50,
         fraud: result.layers.find(l => l.name.includes("Social"))?.score || 50,
       }
     : {};
@@ -104,32 +104,54 @@ export default function Dashboard() {
   if (!result && !isAnalyzing && !error) {
     return (
       <MouseGlowEffect className="min-h-[calc(100vh-3.5rem)]">
-        <div className="relative flex min-h-[calc(100vh-3.5rem)] items-center justify-center overflow-hidden bg-background">
-          {/* Particle background */}
-          <div className="absolute inset-0 z-0 pointer-events-none">
+        <div
+          className="relative flex min-h-[calc(100vh-3.5rem)] items-center justify-center overflow-hidden transition-all duration-1000"
+          style={{
+            background: "linear-gradient(145deg, hsl(270, 20%, 98%) 0%, hsl(265, 30%, 95%) 25%, hsl(270, 25%, 92%) 50%, hsl(275, 20%, 95%) 75%, hsl(260, 30%, 97%) 100%)",
+          }}
+        >
+          {/* Animated moving light sweep */}
+          <div
+            className="absolute inset-0 z-0 pointer-events-none animate-pulse"
+            style={{
+              background: "radial-gradient(ellipse 70% 60% at 50% 40%, hsla(270, 60%, 96%, 0.5) 0%, hsla(280, 40%, 92%, 0.15) 50%, transparent 80%)",
+              animationDuration: "4s",
+            }}
+          />
+
+          {/* Secondary glow accents */}
+          <div
+            className="absolute inset-0 z-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(circle at 25% 75%, hsla(270, 70%, 85%, 0.2) 0%, transparent 50%), radial-gradient(circle at 75% 25%, hsla(280, 60%, 88%, 0.2) 0%, transparent 50%)",
+            }}
+          />
+
+          {/* Particle background — interactive */}
+          <div className="absolute inset-0 z-[1]">
             <ParticleVisualizer />
           </div>
 
           {/* Animated Radar Background */}
-          <div className="absolute inset-0 z-0 flex items-center justify-center opacity-15 pointer-events-none">
-            <div className="relative h-[800px] w-[800px] rounded-full border border-cyan-500/20">
+          <div className="absolute inset-0 z-0 flex items-center justify-center opacity-20 pointer-events-none">
+            <div className="relative h-[800px] w-[800px] rounded-full border border-purple-400/15">
               <div className="absolute inset-4 rounded-full border border-purple-500/10" />
-              <div className="absolute inset-16 rounded-full border border-cyan-500/10" />
-              <div className="absolute inset-32 rounded-full border border-purple-500/5" />
-              <div className="absolute left-1/2 top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-cyan-500/20 to-transparent" />
-              <div className="absolute top-1/2 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-cyan-500/20 to-transparent" />
-              <div className="absolute left-1/2 top-1/2 h-1/2 w-1/2 origin-top-left animate-radar bg-gradient-to-br from-cyan-400/30 via-purple-500/20 to-transparent blur-lg" />
+              <div className="absolute inset-16 rounded-full border border-violet-400/10" />
+              <div className="absolute inset-32 rounded-full border border-purple-300/5" />
+              <div className="absolute left-1/2 top-0 h-full w-[1px] bg-gradient-to-b from-transparent via-purple-400/15 to-transparent" />
+              <div className="absolute top-1/2 left-0 h-[1px] w-full bg-gradient-to-r from-transparent via-purple-400/15 to-transparent" />
+              <div className="absolute left-1/2 top-1/2 h-1/2 w-1/2 origin-top-left animate-radar bg-gradient-to-br from-purple-400/20 via-violet-400/10 to-transparent blur-lg" />
             </div>
           </div>
 
           <div className="relative z-10 w-full max-w-2xl px-4 animate-fade-slide-in">
             <div className="text-center mb-8">
-              <h1 className="text-5xl font-bold tracking-tight text-foreground mb-3">
-                <span className="font-display bg-gradient-to-r from-cyan-400 via-purple-400 to-pink-400 bg-clip-text text-transparent">
+              <h1 className="text-5xl font-bold tracking-tight mb-3">
+                <span className="font-display bg-gradient-to-r from-purple-700 via-violet-600 to-purple-500 bg-clip-text text-transparent drop-shadow-[0_0_30px_rgba(139,92,246,0.3)]">
                   AudioNotary
                 </span>
               </h1>
-              <p className="text-muted-foreground font-mono text-sm max-w-md mx-auto">
+              <p className="text-purple-900/60 font-mono text-sm max-w-md mx-auto">
                 Initialize forensic audit and voice clone detection pipeline. Select analysis mode and upload audio.
               </p>
             </div>
@@ -163,13 +185,13 @@ export default function Dashboard() {
       </div>
 
       {/* Top bar */}
-      <div className="glass-panel sticky top-0 z-50 px-4 py-2 shadow-lg border-b border-cyan-500/10">
+      <div className="glass-panel sticky top-0 z-50 px-4 py-2 shadow-lg border-b border-purple-300/20">
         <div className="mx-auto flex max-w-7xl items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className={`h-2 w-2 rounded-full ${isAnalyzing ? "bg-cyan-400 animate-pulse" : "bg-accent"}`}
-              style={{ boxShadow: isAnalyzing ? "0 0 8px hsl(189, 100%, 50%)" : "0 0 8px hsl(155, 100%, 50%)" }}
+            <div className={`h-2 w-2 rounded-full ${isAnalyzing ? "bg-purple-500 animate-pulse" : "bg-accent"}`}
+              style={{ boxShadow: isAnalyzing ? "0 0 8px hsl(270, 80%, 55%)" : "0 0 8px hsl(280, 85%, 60%)" }}
             />
-            <span className="font-mono text-xs font-semibold tracking-widest text-cyan-400 uppercase">
+            <span className="font-mono text-xs font-semibold tracking-widest text-purple-600 uppercase">
               {analysisMode === "quick" ? "Quick Scan" : "Forensic Analysis"}
             </span>
             {result && (
@@ -202,7 +224,7 @@ export default function Dashboard() {
       {/* ── Loading state (Immersive Forensic Scan) ──────────────────────────── */}
       {isAnalyzing && (
         <div className="relative flex min-h-[80vh] flex-col items-center justify-center p-4">
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-cyan-500/5 via-purple-500/3 via-background to-background pointer-events-none" />
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-purple-500/5 via-violet-500/3 via-background to-background pointer-events-none" />
 
           <div className="relative z-10 w-full max-w-4xl">
             {/* Neural Network Visualization */}
@@ -215,17 +237,17 @@ export default function Dashboard() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Scanning card */}
-              <div className="glass-panel rounded-2xl p-8 shadow-[0_0_50px_rgba(0,200,255,0.05)] overflow-hidden">
+              <div className="glass-panel rounded-2xl p-8 shadow-[0_0_50px_rgba(139,92,246,0.05)] overflow-hidden">
                 {/* Scanning Laser Effect */}
-                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 shadow-[0_0_20px_rgba(0,200,255,1)] z-20 animate-[scan-line_2s_ease-in-out_infinite]" />
+                <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-purple-500 via-violet-500 to-pink-500 shadow-[0_0_20px_rgba(139,92,246,1)] z-20 animate-[scan-line_2s_ease-in-out_infinite]" />
 
                 <div className="flex flex-col items-center text-center">
                   <div className="relative mb-6">
-                    <div className="absolute inset-0 rounded-full bg-cyan-500/20 animate-ping" />
-                    <div className="relative bg-background border border-cyan-500/30 p-4 rounded-full"
-                      style={{ boxShadow: "0 0 30px hsla(189, 100%, 50%, 0.2)" }}
+                    <div className="absolute inset-0 rounded-full bg-purple-500/20 animate-ping" />
+                    <div className="relative bg-background border border-purple-500/30 p-4 rounded-full"
+                      style={{ boxShadow: "0 0 30px hsla(270, 80%, 55%, 0.2)" }}
                     >
-                      <Loader2 className="h-8 w-8 animate-spin text-cyan-400" />
+                      <Loader2 className="h-8 w-8 animate-spin text-purple-500" />
                     </div>
                   </div>
 
@@ -234,20 +256,20 @@ export default function Dashboard() {
                   </h3>
 
                   <div className="h-6 flex items-center justify-center mt-2 mb-6">
-                    <span className="font-mono text-sm bg-gradient-to-r from-cyan-400 to-purple-400 bg-clip-text text-transparent">
+                    <span className="font-mono text-sm bg-gradient-to-r from-purple-500 to-violet-400 bg-clip-text text-transparent">
                       {analysisStep || "Initializing pipeline..."}
                     </span>
                   </div>
 
                   <div className="w-full space-y-2 mt-4">
                     <div className="h-2 w-full overflow-hidden rounded-full bg-secondary/50">
-                      <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-cyan-500 via-purple-500 to-pink-500 animate-[scan-line_1.5s_linear_infinite]" />
+                      <div className="h-full w-1/3 rounded-full bg-gradient-to-r from-purple-500 via-violet-500 to-pink-500 animate-[scan-line_1.5s_linear_infinite]" />
                     </div>
                     <div className="flex justify-between font-mono text-[10px] text-muted-foreground opacity-70">
                       <span>
                         {analysisMode === "quick" ? "3-LAYER SCAN" : "7-LAYER PIPELINE"}
                       </span>
-                      <span className="animate-pulse text-cyan-400">RUNNING...</span>
+                      <span className="animate-pulse text-purple-500">RUNNING...</span>
                     </div>
                   </div>
                 </div>
@@ -294,13 +316,13 @@ export default function Dashboard() {
               <p>Check the following:</p>
               <p>
                 · Backend running? →{" "}
-                <span className="text-cyan-400">
+                <span className="text-purple-600">
                   uvicorn main:app --port 8001
                 </span>
               </p>
               <p>
                 · .env set? →{" "}
-                <span className="text-cyan-400">
+                <span className="text-purple-600">
                   VITE_API_URL=http://localhost:8001/api
                 </span>
               </p>

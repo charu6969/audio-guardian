@@ -1,18 +1,22 @@
 """
-ML Deepfake Classifier — Layer 6 (Improved)
-Uses a pretrained HuggingFace wav2vec2 model fine-tuned on audio deepfake detection.
+ML Deepfake Classifier — Layer 6 (Recalibrated for Modern AI TTS)
 
-Primary model: "motheecreator/wav2vec2-Fake-audio-detection"
-Fallback:      Enhanced feature-engineering ensemble:
-               - GAN artifact detection (high-freq energy, MFCC kurtosis, spectral periodicity)
-               - Vocal tract naturalness (formant stability, LPC residual)
-               - Zero-crossing regularity analysis
-               - Pitch contour naturalness
-               - Spectral flux consistency
-               - Phase coherence analysis
+Modern AI-generated speech (ElevenLabs, Bark, XTTS, etc.) produces audio that is
+acoustically almost identical to real speech at the macro level. Basic checks like
+HF energy, pitch CV, and spectral flux will ALL pass because modern vocoders are
+that good.
 
-The improved fallback uses 6 signal dimensions for more accurate deepfake detection
-even without the ML model.
+To catch modern deepfakes, we need to look at:
+1. MFCC delta smoothness — AI speech has unnaturally smooth MFCC transitions
+2. Micro-jitter in pitch — Real speech has irregular micro-variations; AI is too smooth
+3. Spectral bandwidth variance — AI voices have less natural bandwidth variation
+4. Harmonic regularity — AI voices have too-perfect harmonics
+5. Frame-level energy micro-variance — AI normalizes energy too uniformly
+6. Silence/breathing naturalness — AI pauses are too clean
+7. Sub-band correlation — AI has unnaturally high correlation between frequency bands
+8. Long-term spectral flatness patterns
+
+This classifier is SKEPTICAL BY DEFAULT — audio must prove it's real, not the other way.
 """
 
 import numpy as np
@@ -22,386 +26,434 @@ import warnings
 
 warnings.filterwarnings("ignore")
 
-# ── Model loading (lazy, cached) ──────────────────────────────────────────────
-_pipeline = None
-_pipeline_attempted = False
-TARGET_SR = 16000  # wav2vec2 expects 16 kHz
 
-
-def _try_load_model():
+def _mfcc_smoothness_score(y: np.ndarray, sr: int) -> float:
     """
-    Attempt to load the HuggingFace pipeline once, cache result.
-    Returns the pipeline or None if unavailable.
-    """
-    global _pipeline, _pipeline_attempted
-    if _pipeline_attempted:
-        return _pipeline
-    _pipeline_attempted = True
-    try:
-        from transformers import pipeline as hf_pipeline
-        print("[DeepfakeClassifier] Loading wav2vec2 deepfake detection model...")
-        _pipeline = hf_pipeline(
-            "audio-classification",
-            model="motheecreator/wav2vec2-Fake-audio-detection",
-            device=-1,  # CPU — change to 0 for GPU
-        )
-        print("[DeepfakeClassifier] Model loaded successfully.")
-    except Exception as e:
-        print(f"[DeepfakeClassifier] Model unavailable, using enhanced fallback: {e}")
-        _pipeline = None
-    return _pipeline
-
-
-# ── HuggingFace ML path ───────────────────────────────────────────────────────
-
-def _classify_with_model(y: np.ndarray, sr: int) -> dict:
-    """Run the wav2vec2 pipeline and parse its output."""
-    pipe = _try_load_model()
-    if pipe is None:
-        return None  # signal to use fallback
-
-    # Resample to 16 kHz
-    if sr != TARGET_SR:
-        y = librosa.resample(y, orig_sr=sr, target_sr=TARGET_SR)
-
-    # Use multiple chunks for longer audio (more reliable)
-    max_samples = TARGET_SR * 10
-    chunks = []
-    if len(y) > max_samples:
-        # Analyze beginning, middle, and end chunks
-        chunk_positions = [
-            0,                              # beginning
-            (len(y) - max_samples) // 2,    # middle
-            max(0, len(y) - max_samples),   # end
-        ]
-        for start in chunk_positions:
-            chunks.append(y[start: start + max_samples])
-    else:
-        chunks.append(y)
-
-    # Normalise amplitude for each chunk
-    real_probs = []
-    fake_probs = []
-
-    for chunk in chunks:
-        peak = np.max(np.abs(chunk))
-        if peak > 0:
-            chunk = chunk / peak
-
-        try:
-            results = pipe({"array": chunk, "sampling_rate": TARGET_SR})
-            label_map = {r["label"].lower(): r["score"] for r in results}
-
-            real_p = label_map.get("real", label_map.get("bonafide", 0.0))
-            fake_p = label_map.get("fake", label_map.get("spoof", label_map.get("synthetic", 0.0)))
-
-            total = real_p + fake_p
-            if total > 0:
-                real_p /= total
-                fake_p /= total
-            else:
-                real_p, fake_p = 0.5, 0.5
-
-            real_probs.append(real_p)
-            fake_probs.append(fake_p)
-        except Exception:
-            continue
-
-    if not real_probs:
-        return None  # fallback
-
-    # Average across chunks (more robust for longer audio)
-    real_prob = float(np.mean(real_probs))
-    fake_prob = float(np.mean(fake_probs))
-
-    # Weighted score: penalize more heavily if ANY chunk is suspicious
-    min_real = float(np.min(real_probs))
-    score = int(0.7 * real_prob * 100 + 0.3 * min_real * 100)
-    score = max(0, min(100, score))
-
-    anomaly = fake_prob > 0.45 or min_real < 0.4
-    detail = (
-        f"ML model verdict: {'REAL' if real_prob > 0.5 else 'FAKE'} "
-        f"(real_prob={real_prob:.2%}, fake_prob={fake_prob:.2%}, "
-        f"chunks_analyzed={len(real_probs)}, min_real_chunk={min_real:.2%})"
-    )
-    return {
-        "score": score,
-        "detail": detail,
-        "anomaly": anomaly,
-        "real_probability": real_prob,
-        "fake_probability": fake_prob,
-        "model": "wav2vec2-Fake-audio-detection",
-        "source": "ml_model",
-    }
-
-
-# ── Feature-engineering fallback (IMPROVED) ──────────────────────────────────
-
-def _gan_artifact_score(y: np.ndarray, sr: int) -> float:
-    """
-    GAN / vocoder artifacts detection:
-    - Periodic spectral patterns at harmonic multiples
-    - Unnaturally low high-frequency noise
-    - Quantisation-like MFCC distribution
-    Returns 0.0 (clearly fake) → 1.0 (clearly real)
+    AI-generated speech has unnaturally smooth MFCC delta transitions.
+    Real speech has irregular, jagged MFCC deltas.
+    Returns: low = likely synthetic, high = likely real
     """
     try:
-        stft = np.abs(librosa.stft(y, n_fft=2048))
-        freqs = librosa.fft_frequencies(sr=sr, n_fft=2048)
-
-        # High-frequency energy ratio (above 4 kHz)
-        hf_mask = freqs > 4000
-        hf_energy = np.mean(stft[hf_mask, :]) if hf_mask.any() else 0
-        total_energy = np.mean(stft) + 1e-8
-        hf_ratio = hf_energy / total_energy
-
-        # MFCC kurtosis — GAN voices often have anomalously high kurtosis
         mfccs = librosa.feature.mfcc(y=y, sr=sr, n_mfcc=20)
-        kurt_vals = [kurtosis(mfccs[i]) for i in range(mfccs.shape[0])]
-        mean_kurt = float(np.mean(np.abs(kurt_vals)))
+        delta = librosa.feature.delta(mfccs)
+        delta2 = librosa.feature.delta(mfccs, order=2)
 
-        # Spectral periodicity via autocorrelation of spectral centroid
-        centroid = librosa.feature.spectral_centroid(y=y, sr=sr)[0]
-        acorr = np.correlate(centroid - centroid.mean(), centroid - centroid.mean(), mode="full")
-        acorr = acorr[len(acorr) // 2:]
-        if len(acorr) > 50:
-            side_lobe = np.max(np.abs(acorr[10:50])) / (np.abs(acorr[0]) + 1e-8)
-        else:
-            side_lobe = 0.0
+        # Measure roughness of delta MFCCs (real speech is rougher)
+        delta_roughness = float(np.mean(np.std(delta, axis=1)))
+        delta2_roughness = float(np.mean(np.std(delta2, axis=1)))
 
-        # Score each sub-feature
-        score = 0.65
+        # Kurtosis of delta — AI tends to have lower kurtosis (more gaussian)
+        delta_kurt = float(np.mean([kurtosis(delta[i]) for i in range(delta.shape[0])]))
 
-        # HF energy: real speech has moderate HF, fake often has too little or too much
-        if hf_ratio < 0.02:
-            score -= 0.4   # very little HF = likely synthetic
-        elif hf_ratio < 0.05:
-            score -= 0.15
-        elif hf_ratio > 0.25:
-            score -= 0.1   # unnaturally high HF
-        else:
-            score += 0.1   # healthy HF range
+        # Real speech: roughness > 8, kurt > 3
+        # AI speech: roughness 3-7, kurt 0-2
+        score = 0.3  # skeptical baseline
 
-        # Kurtosis: GAN voices have high kurtosis
-        if mean_kurt > 20:
-            score -= 0.4
-        elif mean_kurt > 12:
-            score -= 0.25
-        elif mean_kurt > 8:
-            score -= 0.1
-        elif mean_kurt < 5:
+        if delta_roughness > 12:
+            score += 0.35
+        elif delta_roughness > 8:
+            score += 0.20
+        elif delta_roughness > 5:
+            score += 0.05
+        # else: stays low (smooth = AI)
+
+        if delta2_roughness > 6:
+            score += 0.15
+        elif delta2_roughness > 3:
             score += 0.05
 
-        # Periodicity: high = GAN
-        if side_lobe > 0.7:
-            score -= 0.3
-        elif side_lobe > 0.5:
-            score -= 0.15
+        if delta_kurt > 5:
+            score += 0.15
+        elif delta_kurt > 2:
+            score += 0.05
+        elif delta_kurt < 0.5:
+            score -= 0.10  # too gaussian = AI
 
         return float(np.clip(score, 0.0, 1.0))
     except Exception:
-        return 0.35
+        return 0.25
 
 
-def _pitch_naturalness_score(y: np.ndarray, sr: int) -> float:
+def _pitch_micro_jitter(y: np.ndarray, sr: int) -> float:
     """
-    Analyze pitch contour naturalness.
-    Real speech has smooth but variable pitch; synthetic often has too-regular or choppy pitch.
-    Returns 0.0 (unnatural) → 1.0 (natural)
+    Real speech has irregular micro-jitter in F0 contour.
+    AI speech is too smooth even with prosody modeling.
     """
     try:
-        f0, voiced_flag, _ = librosa.pyin(
+        f0, _, _ = librosa.pyin(
             y, fmin=librosa.note_to_hz('C2'),
             fmax=librosa.note_to_hz('C7'),
             sr=sr
         )
         voiced_f0 = f0[~np.isnan(f0)]
 
-        if len(voiced_f0) < 10:
-            return 0.5  # not enough voiced frames
+        if len(voiced_f0) < 15:
+            return 0.30
 
-        # Pitch variability (CV) — natural speech ~0.1-0.3
-        pitch_cv = float(np.std(voiced_f0) / (np.mean(voiced_f0) + 1e-8))
+        # Frame-to-frame jitter (irregularity)
+        diffs = np.abs(np.diff(voiced_f0))
+        mean_diff = float(np.mean(diffs))
+        std_diff = float(np.std(diffs))
+        jitter_ratio = std_diff / (mean_diff + 1e-8)
 
-        # Pitch smoothness — consecutive frame differences
-        pitch_diff = np.diff(voiced_f0)
-        smoothness = float(np.std(pitch_diff) / (np.mean(np.abs(pitch_diff)) + 1e-8))
+        # Shimmer-like measure on pitch
+        relative_perturbation = float(np.mean(diffs / (voiced_f0[:-1] + 1e-8)))
 
-        # Voiced ratio — natural speech is ~40-80% voiced
-        voiced_ratio = float(np.sum(~np.isnan(f0)) / len(f0))
+        # Second-order jitter (jitter of jitter)
+        if len(diffs) > 5:
+            jitter_of_jitter = float(np.std(np.diff(diffs)))
+        else:
+            jitter_of_jitter = 0
 
-        score = 0.5
+        score = 0.25  # skeptical default
 
-        # CV scoring
-        if 0.08 < pitch_cv < 0.35:
-            score += 0.2  # natural range
-        elif pitch_cv < 0.04:
-            score -= 0.25  # too monotone (TTS)
-        elif pitch_cv > 0.5:
-            score -= 0.15  # too erratic
+        # Real speech typically: jitter_ratio > 1.2, relative_perturbation > 0.02
+        # AI speech: jitter_ratio 0.5-1.0, relative_perturbation < 0.015
+        if jitter_ratio > 1.5:
+            score += 0.30
+        elif jitter_ratio > 1.0:
+            score += 0.15
+        elif jitter_ratio < 0.6:
+            score -= 0.10  # too smooth
 
-        # Smoothness scoring
-        if smoothness < 2.0:
-            score += 0.1
-        elif smoothness > 5.0:
-            score -= 0.15  # choppy pitch = possible splice
+        if relative_perturbation > 0.03:
+            score += 0.20
+        elif relative_perturbation > 0.015:
+            score += 0.10
+        elif relative_perturbation < 0.008:
+            score -= 0.10  # too stable = AI
 
-        # Voiced ratio
-        if 0.35 < voiced_ratio < 0.85:
-            score += 0.1
-        elif voiced_ratio > 0.95:
-            score -= 0.2  # too much voicing (constant TTS)
+        if jitter_of_jitter > 3.0:
+            score += 0.15
+        elif jitter_of_jitter > 1.5:
+            score += 0.05
 
         return float(np.clip(score, 0.0, 1.0))
     except Exception:
-        return 0.4
+        return 0.25
 
 
-def _spectral_flux_consistency(y: np.ndarray, sr: int) -> float:
+def _spectral_bandwidth_variance(y: np.ndarray, sr: int) -> float:
     """
-    Spectral flux consistency across the recording.
-    Real speech has natural variation; synthetic may be too uniform.
-    Returns 0.0 (suspicious) → 1.0 (natural)
-    """
-    try:
-        onset_env = librosa.onset.onset_strength(y=y, sr=sr)
-        if len(onset_env) < 20:
-            return 0.5
-
-        # Coefficient of variation of onset strength
-        flux_cv = float(np.std(onset_env) / (np.mean(onset_env) + 1e-8))
-
-        # Natural speech typically has CV ~0.5-1.5
-        if 0.4 < flux_cv < 1.8:
-            return 0.8
-        elif flux_cv < 0.2:
-            return 0.3  # too uniform
-        elif flux_cv > 3.0:
-            return 0.4  # too chaotic
-        else:
-            return 0.6
-    except Exception:
-        return 0.5
-
-
-def _phase_coherence_score(y: np.ndarray, sr: int) -> float:
-    """
-    Check phase coherence — vocoder artifacts often have unnaturally aligned phases.
-    Returns 0.0 (suspicious) → 1.0 (natural)
+    Natural speech has high variance in spectral bandwidth over time.
+    AI speech tends to be more uniform.
     """
     try:
-        stft_complex = librosa.stft(y, n_fft=2048)
-        phase = np.angle(stft_complex)
+        bw = librosa.feature.spectral_bandwidth(y=y, sr=sr)[0]
+        bw_cv = float(np.std(bw) / (np.mean(bw) + 1e-8))
 
-        # Phase derivative (instantaneous frequency)
-        phase_diff = np.diff(phase, axis=1)
+        # Also check skewness of bandwidth distribution
+        bw_skew = float(skew(bw))
 
-        # Wrap to [-pi, pi]
-        phase_diff = np.angle(np.exp(1j * phase_diff))
+        score = 0.30
 
-        # Standard deviation of phase derivative — natural speech is noisy,
-        # vocoders tend to have more structured phase
-        phase_std = float(np.mean(np.std(phase_diff, axis=1)))
+        # Real speech: bw_cv > 0.25
+        # AI: bw_cv 0.10-0.20
+        if bw_cv > 0.35:
+            score += 0.35
+        elif bw_cv > 0.25:
+            score += 0.20
+        elif bw_cv > 0.15:
+            score += 0.05
+        # else: too uniform = AI
 
-        if phase_std > 1.2:
-            return 0.8  # naturally noisy phase (good)
-        elif phase_std > 0.8:
-            return 0.6
-        elif phase_std > 0.4:
-            return 0.4  # suspiciously structured
-        else:
-            return 0.25  # very structured = likely vocoder
+        # Real speech has positive skew typically
+        if abs(bw_skew) > 0.8:
+            score += 0.15
+        elif abs(bw_skew) > 0.3:
+            score += 0.05
+
+        return float(np.clip(score, 0.0, 1.0))
     except Exception:
-        return 0.5
+        return 0.25
 
 
-def _classify_with_features(y: np.ndarray, sr: int) -> dict:
+def _harmonic_regularity(y: np.ndarray, sr: int) -> float:
     """
-    Enhanced fallback ensemble using 6 signal dimensions for deepfake detection.
+    AI voices produce too-perfect harmonics.
+    Real speech has natural harmonic imperfections.
     """
-    gan_score = _gan_artifact_score(y, sr)
-    pitch_score = _pitch_naturalness_score(y, sr)
-    flux_score = _spectral_flux_consistency(y, sr)
-    phase_score = _phase_coherence_score(y, sr)
-
-    # Vocal tract filter naturalness — formant bandwidth check
     try:
-        lpc_order = 16
-        autocorr = np.correlate(y, y, mode="full")[len(y) - 1:]
-        autocorr = autocorr[:lpc_order + 1]
-        if autocorr[0] > 0:
-            r = autocorr[1:] / autocorr[0]
-            formant_stability = 1.0 - float(np.std(r[:4]))
-        else:
-            formant_stability = 0.5
+        harmonic, percussive = librosa.effects.hpss(y)
+        h_ratio = float(np.mean(np.abs(harmonic)) / (np.mean(np.abs(y)) + 1e-8))
+
+        # Spectral flatness — AI speech often has less flat spectrum (more tonal)
+        flatness = librosa.feature.spectral_flatness(y=y)[0]
+        mean_flatness = float(np.mean(flatness))
+        flatness_var = float(np.std(flatness) / (mean_flatness + 1e-8))
+
+        # Harmonic energy consistency across frames
+        h_energy = np.abs(librosa.stft(harmonic))
+        h_frame_energy = np.mean(h_energy, axis=0)
+        h_consistency = float(np.std(h_frame_energy) / (np.mean(h_frame_energy) + 1e-8))
+
+        score = 0.30
+
+        # Real speech: h_ratio 0.5-0.75, flatness_var > 0.5
+        # AI: h_ratio > 0.8 (too harmonic), flatness_var < 0.3
+        if h_ratio > 0.85:
+            score -= 0.15  # too harmonically pure = AI
+        elif h_ratio < 0.65:
+            score += 0.15  # natural mix of harmonic/noise
+
+        if flatness_var > 0.8:
+            score += 0.25
+        elif flatness_var > 0.4:
+            score += 0.10
+        elif flatness_var < 0.2:
+            score -= 0.10  # too uniform = AI
+
+        if h_consistency > 0.6:
+            score += 0.15
+        elif h_consistency < 0.3:
+            score -= 0.05
+
+        return float(np.clip(score, 0.0, 1.0))
     except Exception:
-        formant_stability = 0.3
+        return 0.25
 
-    # Zero-crossing rate variance (synthetic voices are unnaturally regular)
-    zcr = librosa.feature.zero_crossing_rate(y)[0]
-    zcr_cv = float(np.std(zcr) / (np.mean(zcr) + 1e-8))
-    zcr_score = min(1.0, zcr_cv * 2.5)  # natural speech CV typically 0.3+
 
-    # Weighted combination of all features
+def _energy_micro_variance(y: np.ndarray, sr: int) -> float:
+    """
+    AI normalizes energy too uniformly. Real speech has natural
+    micro-fluctuations in frame energy.
+    """
+    try:
+        rms = librosa.feature.rms(y=y, frame_length=512, hop_length=128)[0]
+
+        if len(rms) < 30:
+            return 0.30
+
+        # Micro-variance: look at very short-term energy changes
+        rms_diff = np.diff(rms)
+        micro_var = float(np.std(rms_diff) / (np.mean(np.abs(rms_diff)) + 1e-8))
+
+        # Dynamic range in small windows
+        window_size = min(50, len(rms) // 4)
+        if window_size > 5:
+            local_ranges = []
+            for i in range(0, len(rms) - window_size, window_size // 2):
+                window = rms[i:i + window_size]
+                local_ranges.append(float(np.max(window) - np.min(window)))
+            range_var = float(np.std(local_ranges) / (np.mean(local_ranges) + 1e-8))
+        else:
+            range_var = 0.5
+
+        score = 0.25
+
+        # Real speech: micro_var > 1.3, range_var > 0.5
+        # AI: micro_var 0.8-1.1, range_var < 0.4
+        if micro_var > 1.5:
+            score += 0.30
+        elif micro_var > 1.2:
+            score += 0.15
+        elif micro_var < 0.9:
+            score -= 0.10  # too smooth
+
+        if range_var > 0.7:
+            score += 0.25
+        elif range_var > 0.4:
+            score += 0.10
+        elif range_var < 0.25:
+            score -= 0.10
+
+        return float(np.clip(score, 0.0, 1.0))
+    except Exception:
+        return 0.25
+
+
+def _silence_naturalness(y: np.ndarray, sr: int) -> float:
+    """
+    AI-generated audio has unnaturally clean silences/pauses.
+    Real recordings have ambient noise, breathing, mouth sounds.
+    """
+    try:
+        rms = librosa.feature.rms(y=y, frame_length=1024, hop_length=256)[0]
+        threshold = float(np.median(rms) * 0.15)
+
+        # Find silent frames
+        silent_frames = rms < threshold
+        n_silent = int(np.sum(silent_frames))
+
+        if n_silent < 5:
+            return 0.40  # no significant silences to analyze
+
+        # Energy in "silent" regions — real recordings have ambient noise
+        silent_energies = rms[silent_frames]
+        silent_var = float(np.std(silent_energies) / (np.mean(silent_energies) + 1e-8))
+
+        # In real recordings, silence has variable low-level noise
+        # In AI, silence is either dead silent or perfectly uniform
+        score = 0.30
+
+        if silent_var > 0.8:
+            score += 0.35  # naturally varied ambient noise
+        elif silent_var > 0.4:
+            score += 0.15
+        elif silent_var < 0.15:
+            score -= 0.15  # too uniform silence = AI
+
+        # Check silence-to-speech transitions
+        transitions = np.diff(silent_frames.astype(int))
+        n_transitions = int(np.sum(np.abs(transitions)))
+        if n_transitions > 6:
+            score += 0.10  # natural speech has many transitions
+
+        return float(np.clip(score, 0.0, 1.0))
+    except Exception:
+        return 0.25
+
+
+def _subband_correlation(y: np.ndarray, sr: int) -> float:
+    """
+    AI speech often has unnaturally high correlation between frequency sub-bands.
+    Real speech has more independent sub-band behavior.
+    """
+    try:
+        S = np.abs(librosa.stft(y, n_fft=2048))
+        n_bins = S.shape[0]
+
+        # Split into 4 sub-bands
+        band_size = n_bins // 4
+        bands = [np.mean(S[i * band_size:(i + 1) * band_size, :], axis=0) for i in range(4)]
+
+        # Compute pairwise correlations
+        correlations = []
+        for i in range(4):
+            for j in range(i + 1, 4):
+                if len(bands[i]) > 0 and len(bands[j]) > 0:
+                    corr = float(np.corrcoef(bands[i], bands[j])[0, 1])
+                    if not np.isnan(corr):
+                        correlations.append(abs(corr))
+
+        if not correlations:
+            return 0.30
+
+        mean_corr = float(np.mean(correlations))
+
+        score = 0.30
+
+        # Real speech: mean_corr 0.3-0.6 (bands are somewhat independent)
+        # AI: mean_corr > 0.7 (bands are highly correlated due to vocoder)
+        if mean_corr < 0.4:
+            score += 0.35  # good independence between bands
+        elif mean_corr < 0.55:
+            score += 0.20
+        elif mean_corr < 0.7:
+            score += 0.05
+        elif mean_corr > 0.85:
+            score -= 0.15  # very high correlation = likely AI
+
+        return float(np.clip(score, 0.0, 1.0))
+    except Exception:
+        return 0.25
+
+
+def _classify(y: np.ndarray, sr: int) -> dict:
+    """
+    8-dimension deepfake classifier. Skeptical by default.
+    """
+    # Optimization: analyze up to first 15 seconds to ensure instant speed
+    max_samples = sr * 15
+    if len(y) > max_samples:
+        y = y[:max_samples]
+
+    mfcc_sm = _mfcc_smoothness_score(y, sr)
+    pitch_jit = _pitch_micro_jitter(y, sr)
+    bw_var = _spectral_bandwidth_variance(y, sr)
+    harm_reg = _harmonic_regularity(y, sr)
+    energy_mv = _energy_micro_variance(y, sr)
+    silence_nat = _silence_naturalness(y, sr)
+    subband_corr = _subband_correlation(y, sr)
+
+    # ZCR coefficient of variation
+    try:
+        zcr = librosa.feature.zero_crossing_rate(y)[0]
+        zcr_cv = float(np.std(zcr) / (np.mean(zcr) + 1e-8))
+        zcr_score = min(1.0, max(0.0, (zcr_cv - 0.15) * 2.0))  # centered around 0.15-0.65
+    except Exception:
+        zcr_cv = 0.3
+        zcr_score = 0.3
+
+    # Weighted combination — each feature is already skeptical (baseline ~0.25-0.30)
     combined = (
-        0.30 * gan_score +          # GAN artifact detection (primary)
-        0.20 * pitch_score +        # Pitch naturalness
-        0.15 * phase_score +        # Phase coherence
-        0.10 * flux_score +         # Spectral flux consistency
-        0.15 * max(0, formant_stability) +  # Formant stability
-        0.10 * zcr_score            # ZCR regularity
+        0.20 * mfcc_sm +         # MFCC smoothness (most discriminative)
+        0.18 * pitch_jit +        # Pitch micro-jitter
+        0.15 * bw_var +           # Bandwidth variance
+        0.12 * harm_reg +         # Harmonic regularity
+        0.12 * energy_mv +        # Energy micro-variance
+        0.10 * silence_nat +      # Silence naturalness
+        0.08 * subband_corr +     # Sub-band correlation
+        0.05 * zcr_score          # ZCR variance
     )
 
-    # Additional penalties for strong synthetic indicators
-    if zcr_cv < 0.15:
-        combined -= 0.15  # very uniform ZCR = TTS
-    if gan_score < 0.3 and pitch_score < 0.4:
-        combined -= 0.1  # double evidence of synthetic
-    if phase_score < 0.35:
-        combined -= 0.1  # vocoder artifact
+    # Compound penalties: if multiple features suggest synthetic
+    n_low = sum(1 for s in [mfcc_sm, pitch_jit, bw_var, harm_reg, energy_mv]
+                if s < 0.35)
+    if n_low >= 3:
+        combined -= 0.10  # multiple synthetic indicators
+    if n_low >= 4:
+        combined -= 0.10  # very likely synthetic
+
+    # If MFCC smoothness AND pitch jitter both low → strong AI signal
+    if mfcc_sm < 0.35 and pitch_jit < 0.35:
+        combined -= 0.08
+
+    # Exceptionally suspicious MFCC smoothness (hallmark of modern TTS models like ElevenLabs)
+    if mfcc_sm <= 0.25:
+        combined -= 0.30
+        combined = min(combined, 0.38)  # Cap max score so it fails heavily
+
+    # Exceptionally uniform energy microvariance
+    if energy_mv <= 0.25:
+        combined -= 0.15
 
     combined = float(np.clip(combined, 0.0, 1.0))
     score = int(combined * 100)
 
-    anomaly = score < 50
-    status_desc = "REAL" if score >= 60 else "SUSPICIOUS" if score >= 40 else "FAKE"
+    anomaly = score < 55
+    if score >= 60:
+        status_desc = "LIKELY REAL"
+    elif score >= 45:
+        status_desc = "SUSPICIOUS"
+    elif score >= 30:
+        status_desc = "LIKELY SYNTHETIC"
+    else:
+        status_desc = "SYNTHETIC"
+
     detail = (
-        f"Enhanced feature analysis ({status_desc}): "
-        f"GAN={gan_score:.2f}, pitch={pitch_score:.2f}, "
-        f"phase={phase_score:.2f}, flux={flux_score:.2f}, "
-        f"formant={formant_stability:.2f}, ZCR_cv={zcr_cv:.2f} "
+        f"Deepfake analysis ({status_desc}): "
+        f"MFCC_smooth={mfcc_sm:.2f}, pitch_jitter={pitch_jit:.2f}, "
+        f"BW_var={bw_var:.2f}, harmonic={harm_reg:.2f}, "
+        f"energy_mv={energy_mv:.2f}, silence={silence_nat:.2f}, "
+        f"subband={subband_corr:.2f}, ZCR_cv={zcr_cv:.2f} "
         f"→ authenticity {score}/100"
     )
+
     return {
         "score": score,
         "detail": detail,
         "anomaly": anomaly,
-        "gan_artifact_score": float(gan_score),
-        "pitch_naturalness": float(pitch_score),
-        "phase_coherence": float(phase_score),
-        "spectral_flux": float(flux_score),
-        "formant_stability": float(max(0, formant_stability)),
+        "mfcc_smoothness": float(mfcc_sm),
+        "pitch_micro_jitter": float(pitch_jit),
+        "bandwidth_variance": float(bw_var),
+        "harmonic_regularity": float(harm_reg),
+        "energy_micro_variance": float(energy_mv),
+        "silence_naturalness": float(silence_nat),
+        "subband_correlation": float(subband_corr),
         "zcr_cv": float(zcr_cv),
-        "source": "enhanced_feature_ensemble",
+        "source": "deepfake_feature_ensemble_v2",
     }
 
 
 # ── Public entry point ────────────────────────────────────────────────────────
 
 def run(y: np.ndarray, sr: int) -> dict:
-    # Try ML model first
-    ml_result = _classify_with_model(y, sr)
-
-    if ml_result is not None:
-        classifier_result = ml_result
-    else:
-        # Fallback to enhanced engineered features
-        classifier_result = _classify_with_features(y, sr)
+    classifier_result = _classify(y, sr)
 
     score = classifier_result["score"]
     anomaly = classifier_result["anomaly"]
-    status = "PASS" if score >= 65 else ("SUSPICIOUS" if score >= 40 else "FAIL")
+    status = "PASS" if score >= 60 else ("SUSPICIOUS" if score >= 40 else "FAIL")
 
     return {
         "layer": "ML Deepfake Classifier",

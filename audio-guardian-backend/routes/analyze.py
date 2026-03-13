@@ -68,10 +68,10 @@ def _compute_trust_score(layers: list) -> int:
 
 
 def _compute_quick_trust_score(layers: list) -> int:
-    """Quick mode: Bio 30%, DI 25%, ML 45%"""
+    """Quick mode: Bio 35%, Temporal 20%, ML 45%"""
     weights = {
-        "Biological Signature":   0.30,
-        "Digital Integrity":      0.25,
+        "Biological Signature":   0.35,
+        "Temporal Coherence":     0.20,
         "ML Deepfake Classifier": 0.45,
     }
     total_w, total_s = 0.0, 0.0
@@ -238,8 +238,8 @@ async def analyze_audio(file: UploadFile = File(...)):
 @router.post("/analyze/quick")
 async def analyze_audio_quick(file: UploadFile = File(...)):
     """
-    Quick 3-layer analysis: Biological Signature, Digital Integrity, ML Deepfake.
-    Designed for rapid ~2-3 second scans.
+    Quick 3-layer analysis: Biological Signature, Temporal Coherence, ML Deepfake.
+    Designed for rapid ~1-2 second scans. No file I/O-heavy layers.
     """
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -262,21 +262,20 @@ async def analyze_audio_quick(file: UploadFile = File(...)):
         if len(y) < sr * 0.5:
             raise HTTPException(422, "Audio too short (minimum 0.5s)")
 
-        # ── 3 core layers ────────────────────────────────────────────────────
-        di = _run_layer("Digital Integrity", digital_integrity.run, tmp_path, y, sr)
-
+        # ── 3 fast layers (no Digital Integrity — it's too slow for quick) ────
         layers = [
             _run_layer("Biological Signature",   biological.run,          y, sr),
-            di,
+            _run_layer("Temporal Coherence",     temporal.run,             y, sr),
             _run_layer("ML Deepfake Classifier", deepfake_classifier.run, y, sr),
         ]
 
         trust_score = _compute_quick_trust_score(layers)
         verdict = _determine_quick_verdict(trust_score, layers)
-        file_hash = di.get("file_hash", "")
 
-        # ── Minimal visualization ─────────────────────────────────────────────
+        # ── Quick visualization (just waveform, skip heavy spectrogram) ────────
         viz = spectrogram_svc.generate(y, sr)
+        import hashlib
+        file_hash = hashlib.sha256(content).hexdigest()
         metadata = _get_file_metadata(tmp_path, file.filename or "audio", y, sr, file_hash)
 
         return JSONResponse(content={

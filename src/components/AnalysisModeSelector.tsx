@@ -14,32 +14,32 @@ export function AnalysisModeSelector({ mode, onModeChange, className = "" }: Ana
         onClick={() => onModeChange("quick")}
         className={`relative group forensic-card text-left transition-all duration-300 ${
           mode === "quick"
-            ? "neon-border ring-1 ring-cyan-400/30"
-            : "hover:border-cyan-500/20"
+            ? "neon-border ring-1 ring-purple-400/30"
+            : "hover:border-purple-500/20"
         }`}
       >
         {mode === "quick" && (
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-cyan-500/5 to-purple-500/3 pointer-events-none" />
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-500/5 to-violet-500/3 pointer-events-none" />
         )}
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-cyan-500/20 to-blue-500/10">
-              <Zap className="h-5 w-5 text-cyan-400" />
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-purple-500/20 to-violet-500/10">
+              <Zap className="h-5 w-5 text-purple-400" />
             </div>
             <div>
               <h3 className="font-mono text-sm font-bold text-foreground">
                 Quick Analyzer
               </h3>
-              <span className="font-mono text-[10px] text-cyan-400">~2-3 seconds</span>
+              <span className="font-mono text-[10px] text-purple-400">Real-time (&lt; 1s)</span>
             </div>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-            Fast 3-layer scan: Biological Signature, Digital Integrity, ML Deepfake Detection
+            Fast latency-optimized 3-layer scan: Biological Signature, Temporal Coherence, ML Deepfake
           </p>
           <div className="space-y-1">
-            {["Biological Signature", "Digital Integrity", "ML Deepfake"].map(layer => (
+            {["Biological Signature", "Temporal Coherence", "ML Deepfake"].map(layer => (
               <div key={layer} className="flex items-center gap-2">
-                <div className="w-1.5 h-1.5 rounded-full bg-cyan-400" />
+                <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                 <span className="font-mono text-[10px] text-muted-foreground">{layer}</span>
               </div>
             ))}
@@ -52,12 +52,12 @@ export function AnalysisModeSelector({ mode, onModeChange, className = "" }: Ana
         onClick={() => onModeChange("full")}
         className={`relative group forensic-card text-left transition-all duration-300 ${
           mode === "full"
-            ? "neon-border ring-1 ring-cyan-400/30"
-            : "hover:border-cyan-500/20"
+            ? "neon-border ring-1 ring-purple-400/30"
+            : "hover:border-purple-500/20"
         }`}
       >
         {mode === "full" && (
-          <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-500/5 to-cyan-500/3 pointer-events-none" />
+          <div className="absolute inset-0 rounded-xl bg-gradient-to-br from-purple-500/5 to-violet-500/3 pointer-events-none" />
         )}
         <div className="relative">
           <div className="flex items-center gap-2 mb-3">

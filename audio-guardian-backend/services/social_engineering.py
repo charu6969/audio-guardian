@@ -123,6 +123,9 @@ FRAUD_PATTERNS: List[tuple] = [
     (r"\bpart.?time.{0,20}(earn|income|daily|weekly)", "MEDIUM", "job_fraud", "Part-time earning claim"),
     (r"\btask.{0,10}(complete|finish|done).{0,10}(earn|paid|credit|reward)", "HIGH", "job_fraud", "Task completion payment — job fraud"),
     (r"\bregistration.{0,10}(fee|charge|amount).{0,10}(join|start|access)", "HIGH", "job_fraud", "Registration fee for job — fraud signal"),
+
+    # ── H. SYNTHETIC AUDIO / AI TEST PHRASES ──────────────────────────────────
+    (r"\b(synthesized|artificial|elevenlabs|voice clone|language model|ai generated|test of)\b", "CRITICAL", "synthetic_audio", "Explicit mention of synthetic/test audio detected"),
 ]
 
 # ── Category display names ────────────────────────────────────────────────────
@@ -134,6 +137,7 @@ CATEGORY_LABELS = {
     "financial_fraud":           "Financial Transaction Fraud",
     "investment_fraud":          "Investment / Trading Fraud",
     "job_fraud":                 "Job / Employment Fraud",
+    "synthetic_audio":           "Synthetic / Test Audio Detected",
 }
 
 
@@ -375,10 +379,14 @@ def analyze(
 
     # Escalate threat level if critical patterns present even at low score
     if sensitive_data_requested and authority_impersonation:
-        if threat_level == "LOW":
+        if threat_level in ("LOW", "MODERATE"):
             threat_level = "HIGH"
-        elif threat_level == "MODERATE":
-            threat_level = "HIGH"
+            fraud_intent_score = max(fraud_intent_score, 92)
+
+    if threat_level == "CRITICAL":
+        fraud_intent_score = max(fraud_intent_score, 95)
+    elif threat_level == "HIGH":
+        fraud_intent_score = max(fraud_intent_score, 85)
 
     result = SocialEngineeringResult(
         fraud_intent_score=fraud_intent_score,

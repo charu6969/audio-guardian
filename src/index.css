@@ -1,78 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600;700&family=Orbitron:wght@400;500;600;700;800;900&display=swap');
-
 @layer base {
   :root {
-    --background: 225 30% 4%;
-    --foreground: 210 20% 98%;
+    --background: 270 20% 100%;
+    --foreground: 270 40% 12%;
 
-    --card: 225 25% 7%;
-    --card-foreground: 210 20% 98%;
+    --card: 270 20% 100%;
+    --card-foreground: 270 40% 12%;
 
-    --popover: 225 25% 7%;
-    --popover-foreground: 210 20% 98%;
+    --popover: 270 20% 100%;
+    --popover-foreground: 270 40% 12%;
 
-    --primary: 189 100% 50%;
-    --primary-foreground: 225 30% 4%;
+    --primary: 270 90% 65%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 225 20% 12%;
-    --secondary-foreground: 210 20% 98%;
+    --secondary: 270 15% 95%;
+    --secondary-foreground: 270 30% 25%;
 
-    --muted: 225 20% 12%;
-    --muted-foreground: 215 14% 63%;
+    --muted: 270 10% 93%;
+    --muted-foreground: 270 15% 45%;
 
-    --accent: 155 100% 50%;
-    --accent-foreground: 225 30% 4%;
+    --accent: 295 95% 65%;
+    --accent-foreground: 0 0% 100%;
 
-    --destructive: 0 84% 60%;
-    --destructive-foreground: 210 20% 98%;
+    --destructive: 345 84% 60%;
+    --destructive-foreground: 0 0% 100%;
 
-    --warning: 43 96% 56%;
-    --warning-foreground: 225 30% 4%;
+    --warning: 35 100% 55%;
+    --warning-foreground: 270 30% 15%;
 
-    --border: 220 20% 14%;
-    --input: 220 20% 14%;
-    --ring: 189 100% 50%;
+    --border: 270 15% 88%;
+    --input: 270 15% 88%;
+    --ring: 270 90% 65%;
 
     --radius: 0.75rem;
 
-    /* ── Neon palette ── */
-    --neon-cyan: 189 100% 50%;
-    --neon-purple: 270 100% 65%;
-    --neon-magenta: 330 100% 60%;
-    --neon-blue: 210 100% 60%;
-    --neon-orange: 25 100% 55%;
+    /* ── Purple/Magenta palette (Brighter) ── */
+    --neon-cyan: 270 90% 65%;
+    --neon-purple: 295 95% 65%;
+    --neon-magenta: 310 90% 60%;
+    --neon-blue: 250 85% 65%;
+    --neon-orange: 25 100% 60%;
 
     /* ── Gradient tokens ── */
-    --gradient-forensic: linear-gradient(135deg, hsl(189 100% 50% / 0.15), hsl(270 100% 65% / 0.08));
-    --gradient-card: linear-gradient(160deg, hsl(225 25% 9%) 0%, hsl(225 30% 6%) 100%);
-    --gradient-card-hover: linear-gradient(160deg, hsl(225 25% 11%) 0%, hsl(225 30% 8%) 100%);
-    --gradient-hero: radial-gradient(ellipse at 50% 0%, hsl(270 100% 65% / 0.08) 0%, hsl(189 100% 50% / 0.04) 40%, transparent 70%);
-    --gradient-neural: linear-gradient(135deg, hsl(189 100% 50% / 0.2), hsl(270 100% 65% / 0.15), hsl(330 100% 60% / 0.1));
+    --gradient-forensic: linear-gradient(135deg, hsl(270 90% 65% / 0.1), hsl(295 95% 65% / 0.08));
+    --gradient-card: linear-gradient(160deg, hsl(270 20% 100%) 0%, hsl(270 15% 98%) 100%);
+    --gradient-card-hover: linear-gradient(160deg, hsl(270 20% 99%) 0%, hsl(270 18% 96%) 100%);
+    --gradient-hero: radial-gradient(ellipse at 50% 0%, hsl(270 90% 65% / 0.08) 0%, hsl(295 95% 65% / 0.04) 40%, transparent 70%);
+    --gradient-neural: linear-gradient(135deg, hsl(270 90% 65% / 0.15), hsl(295 95% 65% / 0.1), hsl(310 90% 60% / 0.08));
 
-    /* ── Glassmorphism ── */
-    --glass-bg: hsl(225 25% 8% / 0.6);
-    --glass-border: hsl(189 100% 50% / 0.12);
-    --glass-blur: 16px;
+    /* ── Glassmorphism (light mode) ── */
+    --glass-bg: hsl(0 0% 100% / 0.75);
+    --glass-border: hsl(270 80% 75% / 0.2);
+    --glass-blur: 24px;
 
     /* ── Shadows ── */
-    --shadow-glow-primary: 0 0 20px hsl(189 100% 50% / 0.2), 0 0 60px hsl(189 100% 50% / 0.05);
-    --shadow-glow-accent: 0 0 20px hsl(155 100% 50% / 0.2);
-    --shadow-glow-purple: 0 0 20px hsl(270 100% 65% / 0.2);
-    --shadow-card: 0 4px 32px hsl(225 30% 2% / 0.6);
-    --shadow-card-hover: 0 8px 40px hsl(225 30% 2% / 0.7), 0 0 20px hsl(189 100% 50% / 0.08);
+    --shadow-glow-primary: 0 0 20px hsl(270 80% 55% / 0.12), 0 0 60px hsl(270 80% 55% / 0.04);
+    --shadow-glow-accent: 0 0 20px hsl(280 85% 60% / 0.12);
+    --shadow-glow-purple: 0 0 20px hsl(270 80% 55% / 0.15);
+    --shadow-card: 0 2px 20px hsl(270 30% 50% / 0.06);
+    --shadow-card-hover: 0 8px 32px hsl(270 30% 50% / 0.1), 0 0 16px hsl(270 80% 55% / 0.06);
 
-    --sidebar-background: 225 25% 5%;
-    --sidebar-foreground: 210 20% 98%;
-    --sidebar-primary: 189 100% 50%;
-    --sidebar-primary-foreground: 225 30% 4%;
-    --sidebar-accent: 225 20% 12%;
-    --sidebar-accent-foreground: 210 20% 98%;
-    --sidebar-border: 220 20% 14%;
-    --sidebar-ring: 189 100% 50%;
+    --sidebar-background: 270 15% 96%;
+    --sidebar-foreground: 270 30% 15%;
+    --sidebar-primary: 270 80% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 270 15% 93%;
+    --sidebar-accent-foreground: 270 30% 25%;
+    --sidebar-border: 270 15% 88%;
+    --sidebar-ring: 270 80% 55%;
   }
 }
 
@@ -83,8 +83,8 @@
 
   body {
     @apply bg-background text-foreground antialiased;
-    font-family: 'Inter', sans-serif;
-    background: hsl(225 30% 4%);
+    font-family: 'Outfit', sans-serif;
+    background: hsl(270 20% 100%);
     overflow-x: hidden;
   }
 
@@ -107,13 +107,13 @@
     border-radius: var(--radius);
   }
 
-  /* ── Forensic Card (upgraded) ── */
+  /* ── Forensic Card (upgraded smooth transitions) ── */
   .forensic-card {
     @apply rounded-xl p-5;
     background: var(--gradient-card);
-    border: 1px solid hsl(var(--border));
+    border: 1px solid hsl(var(--border) / 0.6);
     box-shadow: var(--shadow-card);
-    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
   }
@@ -124,16 +124,17 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, hsl(var(--neon-cyan) / 0.3), hsl(var(--neon-purple) / 0.2), transparent);
+    height: 1.5px;
+    background: linear-gradient(90deg, transparent, hsl(var(--primary) / 0.5), hsl(var(--accent) / 0.4), transparent);
     opacity: 0;
-    transition: opacity 0.3s;
+    transition: opacity 0.5s ease-in-out;
   }
 
   .forensic-card:hover {
-    border-color: hsl(var(--neon-cyan) / 0.25);
+    border-color: hsl(var(--primary) / 0.3);
     box-shadow: var(--shadow-card-hover);
     background: var(--gradient-card-hover);
+    transform: translateY(-2px);
   }
 
   .forensic-card:hover::before {
@@ -187,16 +188,18 @@
 
   /* ── Upload zone ── */
   .upload-zone {
-    @apply border-2 border-dashed rounded-xl p-12 text-center transition-all duration-500 cursor-pointer;
+    @apply border-2 border-dashed rounded-xl p-12 text-center cursor-pointer;
     border-color: hsl(var(--border));
     background: hsl(var(--card) / 0.3);
+    transition: all 0.5s cubic-bezier(0.4, 0, 0.2, 1);
   }
 
   .upload-zone:hover,
   .upload-zone.drag-over {
-    border-color: hsl(var(--neon-cyan));
-    box-shadow: var(--shadow-glow-primary), inset 0 0 30px hsl(var(--neon-cyan) / 0.03);
-    background: hsl(var(--neon-cyan) / 0.04);
+    border-color: hsl(var(--primary) / 0.6);
+    box-shadow: var(--shadow-glow-primary), inset 0 0 30px hsl(var(--primary) / 0.05);
+    background: hsl(var(--primary) / 0.04);
+    transform: scale(1.01);
   }
 
   /* ── Verdict styles ── */

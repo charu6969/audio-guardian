@@ -8,12 +8,12 @@ interface AnalysisRadarProps {
 }
 
 const AXES = [
-  { key: "biological", label: "Bio", color: "hsl(270, 100%, 65%)" },
-  { key: "integrity", label: "Integrity", color: "hsl(210, 100%, 60%)" },
-  { key: "environment", label: "Environ", color: "hsl(155, 100%, 50%)" },
-  { key: "temporal", label: "Temporal", color: "hsl(43, 96%, 56%)" },
-  { key: "deepfake", label: "Deepfake", color: "hsl(189, 100%, 50%)" },
-  { key: "fraud", label: "Fraud", color: "hsl(330, 100%, 60%)" },
+  { key: "biological", label: "Bio", color: "hsl(270, 90%, 60%)" },
+  { key: "integrity", label: "Integrity", color: "hsl(250, 85%, 65%)" },
+  { key: "environment", label: "Environ", color: "hsl(295, 95%, 60%)" },
+  { key: "temporal", label: "Temporal", color: "hsl(310, 90%, 55%)" },
+  { key: "deepfake", label: "Deepfake", color: "hsl(330, 90%, 60%)" },
+  { key: "fraud", label: "Fraud", color: "hsl(345, 85%, 55%)" },
 ];
 
 export function AnalysisRadar({ scores, animated = true, size = 260, className = "" }: AnalysisRadarProps) {
@@ -80,8 +80,8 @@ export function AnalysisRadar({ scores, animated = true, size = 260, className =
         i === 0 ? ctx.moveTo(x, y) : ctx.lineTo(x, y);
       }
       ctx.closePath();
-      ctx.strokeStyle = `hsla(210, 30%, 40%, ${0.1 + ring * 0.05})`;
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = `hsla(270, 60%, 75%, ${0.2 + ring * 0.1})`;
+      ctx.lineWidth = 1;
       ctx.stroke();
     }
 
@@ -91,8 +91,8 @@ export function AnalysisRadar({ scores, animated = true, size = 260, className =
       ctx.beginPath();
       ctx.moveTo(cx, cy);
       ctx.lineTo(cx + Math.cos(angle) * maxR, cy + Math.sin(angle) * maxR);
-      ctx.strokeStyle = "hsla(210, 30%, 40%, 0.2)";
-      ctx.lineWidth = 0.5;
+      ctx.strokeStyle = "hsla(270, 60%, 75%, 0.4)";
+      ctx.lineWidth = 1;
       ctx.stroke();
     });
 
@@ -110,15 +110,15 @@ export function AnalysisRadar({ scores, animated = true, size = 260, className =
 
     // Gradient fill
     const gradient = ctx.createRadialGradient(cx, cy, 0, cx, cy, maxR);
-    gradient.addColorStop(0, "hsla(189, 100%, 50%, 0.15)");
-    gradient.addColorStop(0.5, "hsla(270, 100%, 65%, 0.1)");
-    gradient.addColorStop(1, "hsla(155, 100%, 50%, 0.08)");
+    gradient.addColorStop(0, "hsla(270, 90%, 65%, 0.25)");
+    gradient.addColorStop(0.5, "hsla(295, 95%, 65%, 0.15)");
+    gradient.addColorStop(1, "hsla(310, 90%, 60%, 0.05)");
     ctx.fillStyle = gradient;
     ctx.fill();
 
     // Border
-    ctx.strokeStyle = "hsla(189, 100%, 60%, 0.6)";
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = "hsla(270, 90%, 65%, 0.8)";
+    ctx.lineWidth = 2.5;
     ctx.stroke();
 
     // Draw data points and labels
@@ -148,8 +148,8 @@ export function AnalysisRadar({ scores, animated = true, size = 260, className =
       const labelR = maxR + 18;
       const lx = cx + Math.cos(angle) * labelR;
       const ly = cy + Math.sin(angle) * labelR;
-      ctx.font = "10px 'JetBrains Mono', monospace";
-      ctx.fillStyle = "hsla(210, 20%, 75%, 0.8)";
+      ctx.font = "bold 11px 'JetBrains Mono', monospace";
+      ctx.fillStyle = "hsla(270, 40%, 35%, 0.9)";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
       ctx.fillText(axis.label, lx, ly);

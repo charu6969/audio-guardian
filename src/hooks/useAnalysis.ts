@@ -134,7 +134,7 @@ function adaptApiResult(api: ApiResult): AnalysisResult {
     caseId: crypto.randomUUID(),
     spectrogramB64: viz?.spectrogram_b64,
     waveformEnvelope: viz?.waveform_envelope,
-    frequencyBands: viz?.frequency_bands as Record<string, number>,
+    frequencyBands: viz?.frequency_bands as unknown as Record<string, number>,
     rawApiResult: api,
   };
 }
@@ -155,7 +155,7 @@ const FULL_STEPS = [
 const QUICK_STEPS = [
   "Extracting spectral features...",
   "Running biological signature analysis...",
-  "Checking digital integrity...",
+  "Evaluating temporal coherence...",
   "Running ML deepfake classifier...",
 ];
 
@@ -183,7 +183,7 @@ export function useAnalysis() {
         setActiveLayerIndex(stepIndex);
         stepIndex++;
       }
-    }, mode === "quick" ? 400 : 800);
+    }, mode === "quick" ? 150 : 800);
 
     try {
       const apiResult = mode === "quick"
