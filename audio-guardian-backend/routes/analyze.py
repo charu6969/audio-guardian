@@ -1,6 +1,7 @@
 """
-Analysis Routes — v3 (Social Engineering Detection added)
+Analysis Routes — v4 (Quick Analyzer + Updated Scoring)
 POST /api/analyze          - Full 7-layer forensic + fraud analysis
+POST /api/analyze/quick    - Quick 3-layer scan (Bio + Digital + ML Deepfake)
 POST /api/analyze/text     - Social engineering scan on raw text transcript
 POST /api/report           - PDF forensic report
 POST /api/compare          - Voice clone detection
@@ -46,20 +47,36 @@ def _get_file_metadata(filepath: str, filename: str, y: np.ndarray, sr: int, fil
 
 def _compute_trust_score(layers: list) -> int:
     """
-    Layer weights — Social Engineering gets highest weight as real-world threat signal.
+    Updated layer weights per spec:
+    Bio 20%, DI 15%, Env 15%, Temporal 10%, AF 10%, ML 20%, SE 10%
     """
     weights = {
-        "Biological Signature":       0.12,
-        "Digital Integrity":          0.10,
-        "Environmental Consistency":  0.10,
+        "Biological Signature":       0.20,
+        "Digital Integrity":          0.15,
+        "Environmental Consistency":  0.15,
         "Temporal Coherence":         0.10,
         "Cross-Modal Fingerprint":    0.10,
-        "ML Deepfake Classifier":     0.18,
-        "Social Engineering Detection": 0.30,  # highest — most actionable signal
+        "ML Deepfake Classifier":     0.20,
+        "Social Engineering Detection": 0.10,
     }
     total_w, total_s = 0.0, 0.0
     for layer in layers:
         w = weights.get(layer["layer"], 0.08)
+        total_s += layer["score"] * w
+        total_w += w
+    return int(round(total_s / total_w)) if total_w > 0 else 50
+
+
+def _compute_quick_trust_score(layers: list) -> int:
+    """Quick mode: Bio 30%, DI 25%, ML 45%"""
+    weights = {
+        "Biological Signature":   0.30,
+        "Digital Integrity":      0.25,
+        "ML Deepfake Classifier": 0.45,
+    }
+    total_w, total_s = 0.0, 0.0
+    for layer in layers:
+        w = weights.get(layer["layer"], 0.10)
         total_s += layer["score"] * w
         total_w += w
     return int(round(total_s / total_w)) if total_w > 0 else 50
@@ -94,6 +111,22 @@ def _determine_verdict(trust_score: int, layers: list) -> str:
         return "SYNTHETIC / MANIPULATED"
 
 
+def _determine_quick_verdict(trust_score: int, layers: list) -> str:
+    """Quick mode verdict — simpler logic."""
+    n_fail = sum(1 for l in layers if l["status"] == "FAIL")
+    ml_layer = next((l for l in layers if l["layer"] == "ML Deepfake Classifier"), None)
+    ml_score = ml_layer["score"] if ml_layer else trust_score
+
+    if trust_score >= 75 and n_fail == 0 and ml_score >= 60:
+        return "AUTHENTIC"
+    elif trust_score >= 55 and n_fail <= 1:
+        return "LIKELY AUTHENTIC"
+    elif trust_score >= 40:
+        return "SUSPICIOUS"
+    else:
+        return "LIKELY SYNTHETIC"
+
+
 def _run_layer(name: str, fn, *args) -> dict:
     try:
         return fn(*args)
@@ -111,8 +144,6 @@ def _run_layer(name: str, fn, *args) -> dict:
 async def analyze_audio(file: UploadFile = File(...)):
     """
     Full 7-layer forensic + fraud trust audit.
-    Layer 7 (Social Engineering) runs on Whisper transcript if available,
-    otherwise skips transcription and returns a partial SE result.
     """
     ext = os.path.splitext(file.filename or "")[1].lower()
     if ext not in ALLOWED_EXTENSIONS:
@@ -181,7 +212,6 @@ async def analyze_audio(file: UploadFile = File(...)):
                 "duration_sec": viz.get("duration_sec"),
                 "sample_rate": viz.get("sample_rate"),
             },
-            # ── Top-level fraud summary (convenience for frontend) ─────────────
             "fraud_summary": {
                 "threat_level": se_layer.get("threat_level", "LOW"),
                 "fraud_intent_score": se_layer.get("fraud_intent_score", 0),
@@ -205,15 +235,79 @@ async def analyze_audio(file: UploadFile = File(...)):
             os.unlink(tmp_path)
 
 
+@router.post("/analyze/quick")
+async def analyze_audio_quick(file: UploadFile = File(...)):
+    """
+    Quick 3-layer analysis: Biological Signature, Digital Integrity, ML Deepfake.
+    Designed for rapid ~2-3 second scans.
+    """
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(400, f"Unsupported type: {ext}. Allowed: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    tmp_path = None
+    try:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=ext) as tmp:
+            content = await file.read()
+            if len(content) > MAX_FILE_SIZE_MB * 1024 * 1024:
+                raise HTTPException(413, f"File exceeds {MAX_FILE_SIZE_MB}MB")
+            tmp.write(content)
+            tmp_path = tmp.name
+
+        try:
+            y, sr = _load_audio(tmp_path)
+        except Exception as e:
+            raise HTTPException(422, f"Cannot decode audio: {e}")
+
+        if len(y) < sr * 0.5:
+            raise HTTPException(422, "Audio too short (minimum 0.5s)")
+
+        # ── 3 core layers ────────────────────────────────────────────────────
+        di = _run_layer("Digital Integrity", digital_integrity.run, tmp_path, y, sr)
+
+        layers = [
+            _run_layer("Biological Signature",   biological.run,          y, sr),
+            di,
+            _run_layer("ML Deepfake Classifier", deepfake_classifier.run, y, sr),
+        ]
+
+        trust_score = _compute_quick_trust_score(layers)
+        verdict = _determine_quick_verdict(trust_score, layers)
+        file_hash = di.get("file_hash", "")
+
+        # ── Minimal visualization ─────────────────────────────────────────────
+        viz = spectrogram_svc.generate(y, sr)
+        metadata = _get_file_metadata(tmp_path, file.filename or "audio", y, sr, file_hash)
+
+        return JSONResponse(content={
+            "success": True,
+            "verdict": verdict,
+            "trust_score": trust_score,
+            "file_metadata": metadata,
+            "layers": layers,
+            "visualization": {
+                "spectrogram_b64": viz.get("spectrogram_b64"),
+                "waveform_envelope": viz.get("waveform_envelope"),
+                "frequency_bands": viz.get("frequency_bands"),
+                "anomaly_markers": viz.get("anomaly_markers"),
+                "duration_sec": viz.get("duration_sec"),
+                "sample_rate": viz.get("sample_rate"),
+            },
+        })
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(500, f"Quick analysis failed: {e}\n{traceback.format_exc()}")
+    finally:
+        if tmp_path and os.path.exists(tmp_path):
+            os.unlink(tmp_path)
+
+
 @router.post("/analyze/text")
 async def analyze_text(payload: dict = Body(...)):
     """
     Social engineering scan on a raw text transcript (no audio needed).
-    Use this for:
-      - Testing detection against a script
-      - Scanning SMS/WhatsApp message text
-      - Manual transcript entry
-
     Body: { "transcript": "This is calling from RBI..." }
     """
     transcript = payload.get("transcript", "").strip()

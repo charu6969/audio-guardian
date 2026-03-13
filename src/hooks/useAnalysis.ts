@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import {
   analyzeAudio,
+  analyzeAudioQuick,
   downloadReport,
   type AnalysisResult as ApiResult,
   type ForensicLayer,
@@ -31,7 +32,7 @@ export interface TrustLayer {
   score: number;
   status: "PASS" | "FAIL" | "SUSPICIOUS";
   subMetrics: SubMetric[];
-  rawLayer?: ForensicLayer; // full API layer attached for TrustLayerCard
+  rawLayer?: ForensicLayer;
 }
 
 export interface Anomaly {
@@ -44,14 +45,15 @@ export interface AnalysisResult {
   fileInfo: FileInfo;
   layers: TrustLayer[];
   overallScore: number;
+  authenticityScore: number;
+  fraudRiskScore: number;
   verdict: string;
   anomalies: Anomaly[];
   caseId: string;
-  // Real extras from API
   spectrogramB64?: string | null;
   waveformEnvelope?: number[];
   frequencyBands?: Record<string, number>;
-  rawApiResult?: ApiResult; // full API response kept for PDF report generation
+  rawApiResult?: ApiResult;
 }
 
 // ── Icon map ──────────────────────────────────────────────────────────────────
@@ -68,7 +70,7 @@ const LAYER_ICONS: Record<string, string> = {
 
 // ── Adapter: convert API response → AnalysisResult shape ─────────────────────
 
-function adaptApiResult(api: ApiResult, file: File): AnalysisResult {
+function adaptApiResult(api: ApiResult): AnalysisResult {
   const meta = api.file_metadata;
   const viz = api.visualization;
 
@@ -82,7 +84,6 @@ function adaptApiResult(api: ApiResult, file: File): AnalysisResult {
     sha256: meta.file_hash,
   };
 
-  // Map API layers → TrustLayer[]
   const layers: TrustLayer[] = api.layers.map((l, i) => {
     const subMetrics: SubMetric[] = Object.entries(l.sub_metrics ?? {}).map(
       ([key, val]) => ({
@@ -103,8 +104,15 @@ function adaptApiResult(api: ApiResult, file: File): AnalysisResult {
     };
   });
 
-  // Map API anomaly markers → Anomaly[]
-  const anomalies: Anomaly[] = (viz.anomaly_markers ?? []).map((m) => ({
+  // Compute sub-scores
+  const bioScore = layers.find(l => l.name.includes("Biological"))?.score || 50;
+  const mlScore = layers.find(l => l.name.includes("Deepfake"))?.score || 50;
+  const seScore = layers.find(l => l.name.includes("Social"))?.score;
+
+  const authenticityScore = Math.round((bioScore * 0.4 + mlScore * 0.6));
+  const fraudRiskScore = seScore !== undefined ? Math.round(100 - seScore) : 0;
+
+  const anomalies: Anomaly[] = (viz?.anomaly_markers ?? []).map((m) => ({
     timestamp: m.time_sec,
     severity:
       m.severity === "high"
@@ -119,26 +127,36 @@ function adaptApiResult(api: ApiResult, file: File): AnalysisResult {
     fileInfo,
     layers,
     overallScore: api.trust_score,
+    authenticityScore,
+    fraudRiskScore,
     verdict: api.verdict,
     anomalies,
     caseId: crypto.randomUUID(),
-    spectrogramB64: viz.spectrogram_b64,
-    waveformEnvelope: viz.waveform_envelope,
-    frequencyBands: viz.frequency_bands as Record<string, number>,
+    spectrogramB64: viz?.spectrogram_b64,
+    waveformEnvelope: viz?.waveform_envelope,
+    frequencyBands: viz?.frequency_bands as Record<string, number>,
     rawApiResult: api,
   };
 }
 
-// ── Analysis steps shown in UI while waiting ──────────────────────────────────
+// ── Analysis steps ────────────────────────────────────────────────────────────
 
-const ANALYSIS_STEPS = [
+const FULL_STEPS = [
   "Extracting spectral features...",
   "Running biological signature analysis...",
   "Checking digital integrity...",
   "Analyzing environmental consistency...",
   "Evaluating temporal coherence...",
   "Running ML deepfake classifier...",
+  "Scanning for social engineering patterns...",
   "Generating forensic report...",
+];
+
+const QUICK_STEPS = [
+  "Extracting spectral features...",
+  "Running biological signature analysis...",
+  "Checking digital integrity...",
+  "Running ML deepfake classifier...",
 ];
 
 // ── Hook ──────────────────────────────────────────────────────────────────────
@@ -148,37 +166,47 @@ export function useAnalysis() {
   const [analysisStep, setAnalysisStep] = useState("");
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [analysisMode, setAnalysisMode] = useState<"quick" | "full">("full");
+  const [activeLayerIndex, setActiveLayerIndex] = useState(-1);
 
-  const analyze = useCallback(async (file: File) => {
+  const runAnalysis = useCallback(async (file: File, mode: "quick" | "full") => {
     setIsAnalyzing(true);
     setResult(null);
     setError(null);
+    setActiveLayerIndex(0);
 
-    // Animate steps while API call runs in parallel
+    const steps = mode === "quick" ? QUICK_STEPS : FULL_STEPS;
     let stepIndex = 0;
     const stepInterval = setInterval(() => {
-      if (stepIndex < ANALYSIS_STEPS.length - 1) {
-        setAnalysisStep(ANALYSIS_STEPS[stepIndex]);
+      if (stepIndex < steps.length - 1) {
+        setAnalysisStep(steps[stepIndex]);
+        setActiveLayerIndex(stepIndex);
         stepIndex++;
       }
-    }, 800);
+    }, mode === "quick" ? 400 : 800);
 
     try {
-      // Real API call
-      const apiResult = await analyzeAudio(file);
+      const apiResult = mode === "quick"
+        ? await analyzeAudioQuick(file)
+        : await analyzeAudio(file);
       clearInterval(stepInterval);
       setAnalysisStep("Analysis complete ✓");
+      setActiveLayerIndex(-1);
 
-      const adapted = adaptApiResult(apiResult, file);
+      const adapted = adaptApiResult(apiResult);
       setResult(adapted);
     } catch (err: any) {
       clearInterval(stepInterval);
       setError(err.message || "Analysis failed — is the backend running?");
       setAnalysisStep("");
+      setActiveLayerIndex(-1);
     } finally {
       setIsAnalyzing(false);
     }
   }, []);
+
+  const analyze = useCallback((file: File) => runAnalysis(file, "full"), [runAnalysis]);
+  const analyzeQuick = useCallback((file: File) => runAnalysis(file, "quick"), [runAnalysis]);
 
   const generateReport = useCallback(async () => {
     if (!result?.rawApiResult) return;
@@ -189,12 +217,11 @@ export function useAnalysis() {
     }
   }, [result]);
 
-  // Kept for UI toggle compatibility — re-runs analysis is not needed since
-  // the result is now real. This just clears result so user can re-upload.
   const resetAnalysis = useCallback(() => {
     setResult(null);
     setError(null);
     setAnalysisStep("");
+    setActiveLayerIndex(-1);
   }, []);
 
   return {
@@ -203,9 +230,12 @@ export function useAnalysis() {
     result,
     error,
     analyze,
+    analyzeQuick,
     generateReport,
     resetAnalysis,
-    // Legacy compat: toggleDemoMode is a no-op (real data doesn't need it)
+    analysisMode,
+    setAnalysisMode,
+    activeLayerIndex,
     demoMode: "authentic" as const,
     toggleDemoMode: resetAnalysis,
   };

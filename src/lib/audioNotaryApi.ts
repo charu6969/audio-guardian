@@ -1,5 +1,8 @@
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
-
+let API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8001/api";
+API_BASE = API_BASE.replace(/\/$/, "");
+if (!API_BASE.endsWith("/api")) {
+  API_BASE += "/api";
+}
 export interface SubMetric {
   score: number;
   detail: string;
@@ -15,6 +18,15 @@ export interface ForensicLayer {
   sub_metrics: Record<string, SubMetric>;
   file_hash?: string;
   error?: string;
+  // ML layer extras
+  threat_level?: string;
+  fraud_intent_score?: number;
+  sensitive_data_requested?: boolean;
+  authority_impersonation?: boolean;
+  urgency_level?: string;
+  recommended_action?: string;
+  plain_english_summary?: string;
+  flagged_segments?: any[];
 }
 
 export interface AnomalyMarker {
@@ -57,6 +69,7 @@ export interface AnalysisResult {
   file_metadata: FileMetadata;
   layers: ForensicLayer[];
   visualization: VisualizationData;
+  fraud_summary?: any;
 }
 
 export interface CompareResult {
@@ -73,6 +86,22 @@ export async function analyzeAudio(file: File): Promise<AnalysisResult> {
   const formData = new FormData();
   formData.append("file", file);
   const response = await fetch(`${API_BASE}/analyze`, {
+    method: "POST",
+    body: formData,
+  });
+  if (!response.ok) {
+    const err = await response
+      .json()
+      .catch(() => ({ detail: "Unknown error" }));
+    throw new Error(err.detail || `HTTP ${response.status}`);
+  }
+  return response.json() as Promise<AnalysisResult>;
+}
+
+export async function analyzeAudioQuick(file: File): Promise<AnalysisResult> {
+  const formData = new FormData();
+  formData.append("file", file);
+  const response = await fetch(`${API_BASE}/analyze/quick`, {
     method: "POST",
     body: formData,
   });

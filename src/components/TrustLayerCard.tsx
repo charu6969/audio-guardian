@@ -7,42 +7,50 @@ import { ChevronDown, ChevronUp, AlertTriangle, CheckCircle2, ShieldAlert } from
 const LAYER_META: Record<string, {
   icon: string;
   description: string;
-  color: string;
+  gradient: string;
+  accentColor: string;
 }> = {
   "Biological Signature": {
     icon: "🧬",
     description: "Detects micro-tremors, glottal pulse irregularity, and sub-glottal resonance unique to human vocal tracts",
-    color: "from-purple-500/20 to-purple-900/5",
+    gradient: "from-purple-500/20 to-purple-900/5",
+    accentColor: "hsla(270, 100%, 65%, 0.5)",
   },
   "Digital Integrity": {
     icon: "🔒",
     description: "Verifies metadata consistency, encoding artifacts, and compression fingerprints for tampering evidence",
-    color: "from-blue-500/20 to-blue-900/5",
+    gradient: "from-blue-500/20 to-blue-900/5",
+    accentColor: "hsla(210, 100%, 60%, 0.5)",
   },
   "Environmental Consistency": {
     icon: "🏠",
     description: "Analyzes room acoustics, background noise uniformity, and acoustic signature across the recording",
-    color: "from-emerald-500/20 to-emerald-900/5",
+    gradient: "from-emerald-500/20 to-emerald-900/5",
+    accentColor: "hsla(155, 100%, 50%, 0.5)",
   },
   "Temporal Coherence": {
     icon: "⏱️",
     description: "Checks breathing patterns, pause distribution, and prosody naturalness for speech rhythm anomalies",
-    color: "from-amber-500/20 to-amber-900/5",
+    gradient: "from-amber-500/20 to-amber-900/5",
+    accentColor: "hsla(43, 96%, 56%, 0.5)",
   },
   "Cross-Modal Fingerprint": {
     icon: "🔗",
     description: "Detects splice points via noise floor analysis, spectral discontinuity, and dynamic range integrity",
-    color: "from-pink-500/20 to-pink-900/5",
+    gradient: "from-pink-500/20 to-pink-900/5",
+    accentColor: "hsla(330, 100%, 60%, 0.5)",
   },
   "ML Deepfake Classifier": {
     icon: "🤖",
     description: "Neural network analysis using wav2vec2 model fine-tuned for synthetic speech detection",
-    color: "from-cyan-500/20 to-cyan-900/5",
+    gradient: "from-cyan-500/20 to-cyan-900/5",
+    accentColor: "hsla(189, 100%, 50%, 0.5)",
   },
   "Social Engineering Detection": {
     icon: "🚨",
     description: "Scans transcript for fraud patterns — sensitive data requests, authority impersonation, and urgency pressure",
-    color: "from-red-500/20 to-red-900/5",
+    gradient: "from-red-500/20 to-red-900/5",
+    accentColor: "hsla(0, 84%, 60%, 0.5)",
   },
 };
 
@@ -80,20 +88,16 @@ interface TrustLayerCardProps {
 }
 
 function StatusChip({ status }: { status: string }) {
-  const cls =
+  const config =
     status === "PASS"
-      ? "status-pass"
+      ? { cls: "bg-emerald-500/10 border-emerald-500/30 text-emerald-400", Icon: CheckCircle2 }
       : status === "FAIL"
-        ? "status-fail"
-        : "status-warning";
-  const Icon =
-    status === "PASS" ? CheckCircle2 : status === "FAIL" ? ShieldAlert : AlertTriangle;
+        ? { cls: "bg-red-500/10 border-red-500/30 text-red-400", Icon: ShieldAlert }
+        : { cls: "bg-amber-500/10 border-amber-500/30 text-amber-400", Icon: AlertTriangle };
 
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-xs font-semibold ${cls}`}
-    >
-      <Icon className="h-3 w-3" />
+    <span className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 font-mono text-[10px] font-bold ${config.cls}`}>
+      <config.Icon className="h-3 w-3" />
       {status}
     </span>
   );
@@ -106,20 +110,28 @@ function ScoreBar({ score, delay }: { score: number; delay: number }) {
     return () => clearTimeout(t);
   }, [score, delay]);
 
-  const color =
-    score >= 75 ? "bg-accent" : score >= 50 ? "bg-warning" : "bg-destructive";
+  const gradient =
+    score >= 75
+      ? "from-emerald-400 to-green-500"
+      : score >= 50
+        ? "from-amber-400 to-yellow-500"
+        : "from-red-400 to-rose-500";
+
+  const glowColor =
+    score >= 75
+      ? "hsla(155, 100%, 50%, 0.4)"
+      : score >= 50
+        ? "hsla(43, 96%, 56%, 0.4)"
+        : "hsla(0, 84%, 60%, 0.4)";
 
   return (
-    <div className="h-2.5 w-full rounded-full bg-secondary/70 overflow-hidden">
+    <div className="h-2.5 w-full rounded-full bg-secondary/40 overflow-hidden">
       <div
-        className={`h-full rounded-full ${color} score-bar-fill transition-all duration-700 ease-out`}
+        className={`h-full rounded-full bg-gradient-to-r ${gradient} score-bar-fill`}
         style={{
           width: `${width}%`,
-          boxShadow: score >= 75
-            ? "0 0 8px hsl(155 100% 50% / 0.4)"
-            : score >= 50
-              ? "0 0 8px hsl(43 96% 56% / 0.4)"
-              : "0 0 8px hsl(0 84% 60% / 0.4)",
+          boxShadow: `0 0 8px ${glowColor}`,
+          transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)",
         }}
       />
     </div>
@@ -132,34 +144,38 @@ function MiniMetricBar({ score, label, anomaly, detail }: {
   anomaly?: boolean;
   detail?: string;
 }) {
-  const color =
-    score >= 75 ? "bg-accent" : score >= 50 ? "bg-warning" : "bg-destructive";
+  const gradient =
+    score >= 75
+      ? "from-emerald-400 to-green-500"
+      : score >= 50
+        ? "from-amber-400 to-yellow-500"
+        : "from-red-400 to-rose-500";
   const textColor =
-    score >= 75 ? "text-accent" : score >= 50 ? "text-warning" : "text-destructive";
+    score >= 75 ? "text-emerald-400" : score >= 50 ? "text-amber-400" : "text-red-400";
 
   return (
-    <div className="rounded-lg bg-secondary/30 border border-border/50 px-3 py-2.5 hover:border-border hover:bg-secondary/50 transition-all duration-200">
+    <div className="rounded-lg bg-secondary/20 border border-border/30 px-3 py-2.5 hover:border-border/60 hover:bg-secondary/30 transition-all duration-200">
       <div className="flex items-center justify-between mb-1.5">
-        <p className="text-xs font-medium text-muted-foreground">
+        <p className="text-[11px] font-medium text-muted-foreground">
           {label}
         </p>
         <div className="flex items-center gap-1.5">
           {anomaly && (
-            <AlertTriangle className="h-3 w-3 text-warning animate-pulse" />
+            <AlertTriangle className="h-3 w-3 text-amber-400 animate-pulse" />
           )}
           <span className={`font-mono text-sm font-bold ${textColor}`}>
             {score}
           </span>
         </div>
       </div>
-      <div className="h-1.5 w-full rounded-full bg-secondary/70 overflow-hidden">
+      <div className="h-1.5 w-full rounded-full bg-secondary/50 overflow-hidden">
         <div
-          className={`h-full rounded-full ${color} transition-all duration-500`}
+          className={`h-full rounded-full bg-gradient-to-r ${gradient} transition-all duration-500`}
           style={{ width: `${score}%` }}
         />
       </div>
       {detail && (
-        <p className="mt-1.5 text-[10px] leading-tight text-muted-foreground/70 line-clamp-2">
+        <p className="mt-1.5 text-[10px] leading-tight text-muted-foreground/60 line-clamp-2">
           {detail}
         </p>
       )}
@@ -170,31 +186,36 @@ function MiniMetricBar({ score, label, anomaly, detail }: {
 export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
   const [visible, setVisible] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [activated, setActivated] = useState(false);
 
   useEffect(() => {
-    const t = setTimeout(() => setVisible(true), delay);
-    return () => clearTimeout(t);
+    const t1 = setTimeout(() => setVisible(true), delay);
+    const t2 = setTimeout(() => setActivated(true), delay + 200);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [delay]);
 
   if (!visible) return null;
 
-  // Use rawLayer (ForensicLayer from API) for rich sub-metric data
   const raw = layer.rawLayer;
 
   const meta = LAYER_META[layer.name] ?? {
     icon: layer.icon ?? "🔍",
     description: "Forensic analysis layer",
-    color: "from-slate-500/20 to-slate-900/5",
+    gradient: "from-slate-500/20 to-slate-900/5",
+    accentColor: "hsla(210, 30%, 50%, 0.5)",
   };
 
   const borderColor =
     layer.status === "PASS"
-      ? "border-l-accent"
+      ? "border-l-emerald-500"
       : layer.status === "FAIL"
-        ? "border-l-destructive"
-        : "border-l-warning";
+        ? "border-l-red-500"
+        : "border-l-amber-500";
 
-  // Build sub-metrics from rawLayer.sub_metrics (rich API data)
+  // Build sub-metrics
   const subMetrics = raw?.sub_metrics
     ? Object.entries(raw.sub_metrics).map(([key, metric]) => ({
         key,
@@ -211,33 +232,44 @@ export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
         detail: undefined as string | undefined,
       }));
 
-  // Get the most important detail text from sub-metrics
   const primaryDetail = subMetrics.find(m => m.detail && m.anomaly)?.detail
     ?? subMetrics.find(m => m.detail)?.detail;
 
-  // ML Classifier detail
   const mlDetail = layer.name === "ML Deepfake Classifier"
     ? raw?.sub_metrics?.deepfake_classifier?.detail
     : undefined;
 
-  // Error from raw layer
   const errorMsg = raw?.error;
 
   return (
     <div
-      className={`forensic-card border-l-4 ${borderColor} animate-fade-slide-in overflow-hidden`}
+      className={`forensic-card border-l-4 ${borderColor} overflow-hidden ${
+        activated ? "animate-layer-activate" : "opacity-0"
+      }`}
+      style={{
+        animationDelay: `${index * 100}ms`,
+      }}
     >
+      {/* Layer activation glow bar */}
+      <div
+        className="absolute top-0 left-0 right-0 h-[2px] transition-opacity duration-1000"
+        style={{
+          background: `linear-gradient(90deg, transparent, ${meta.accentColor}, transparent)`,
+          opacity: activated ? 1 : 0,
+        }}
+      />
+
       {/* ── Header ──────────────────────────────────────────────────────────── */}
       <div
         className="flex items-center justify-between cursor-pointer select-none"
         onClick={() => setExpanded(!expanded)}
       >
         <div className="flex items-center gap-3">
-          <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${meta.color}`}>
+          <div className={`flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-br ${meta.gradient}`}>
             <span className="text-xl">{meta.icon}</span>
           </div>
           <div>
-            <span className="font-mono text-[10px] text-muted-foreground/60 uppercase tracking-widest">
+            <span className="font-mono text-[10px] text-muted-foreground/50 uppercase tracking-widest">
               Layer {index + 1}
             </span>
             <h3 className="text-sm font-semibold text-foreground leading-tight">
@@ -246,7 +278,17 @@ export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
           </div>
         </div>
         <div className="flex items-center gap-3">
-          <span className="font-mono text-2xl font-bold text-foreground">
+          <span
+            className="font-display text-2xl font-bold"
+            style={{
+              color: layer.score >= 70 ? "hsl(155, 100%, 50%)" : layer.score >= 45 ? "hsl(43, 96%, 56%)" : "hsl(0, 84%, 60%)",
+              textShadow: layer.score >= 70
+                ? "0 0 10px hsla(155, 100%, 50%, 0.3)"
+                : layer.score >= 45
+                  ? "0 0 10px hsla(43, 96%, 56%, 0.3)"
+                  : "0 0 10px hsla(0, 84%, 60%, 0.3)",
+            }}
+          >
             {layer.score}
           </span>
           <StatusChip status={layer.status} />
@@ -262,30 +304,30 @@ export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
       </div>
 
       {/* ── Description ─────────────────────────────────────────────────────── */}
-      <p className="mt-2 text-xs text-muted-foreground/80 leading-relaxed">
+      <p className="mt-2 text-xs text-muted-foreground/60 leading-relaxed">
         {meta.description}
       </p>
 
       {/* ── Error ───────────────────────────────────────────────────────────── */}
       {errorMsg && (
-        <div className="mt-2 flex items-center gap-2 rounded-md bg-destructive/10 border border-destructive/30 px-3 py-2">
-          <AlertTriangle className="h-3.5 w-3.5 text-destructive flex-shrink-0" />
-          <p className="text-xs text-destructive">{errorMsg}</p>
+        <div className="mt-2 flex items-center gap-2 rounded-lg bg-red-500/10 border border-red-500/20 px-3 py-2">
+          <AlertTriangle className="h-3.5 w-3.5 text-red-400 flex-shrink-0" />
+          <p className="text-xs text-red-400">{errorMsg}</p>
         </div>
       )}
 
       {/* ── Key finding (collapsed preview) ─────────────────────────────────── */}
       {primaryDetail && !expanded && (
-        <div className="mt-2 rounded-md bg-secondary/30 border border-border/30 px-3 py-2">
-          <p className="font-mono text-[11px] text-muted-foreground leading-relaxed line-clamp-2">
+        <div className="mt-2 rounded-lg bg-secondary/20 border border-border/20 px-3 py-2">
+          <p className="font-mono text-[11px] text-muted-foreground/70 leading-relaxed line-clamp-2">
             {String(primaryDetail)}
           </p>
         </div>
       )}
 
       {mlDetail && !expanded && (
-        <div className="mt-2 rounded-md bg-secondary/30 border border-border/30 px-3 py-2">
-          <p className="font-mono text-[11px] text-muted-foreground leading-relaxed">
+        <div className="mt-2 rounded-lg bg-cyan-500/5 border border-cyan-500/10 px-3 py-2">
+          <p className="font-mono text-[11px] text-cyan-400/80 leading-relaxed">
             {String(mlDetail)}
           </p>
         </div>
@@ -294,7 +336,7 @@ export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
       {/* ── Expanded sub-metrics ────────────────────────────────────────────── */}
       {expanded && subMetrics.length > 0 && (
         <div className="mt-3 space-y-2 animate-fade-slide-in">
-          <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground/60 mb-2">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-muted-foreground/40 mb-2">
             Sub-metric Breakdown
           </p>
           <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
@@ -310,8 +352,8 @@ export function TrustLayerCard({ layer, index, delay }: TrustLayerCardProps) {
           </div>
 
           {mlDetail && (
-            <div className="mt-2 rounded-md bg-primary/5 border border-primary/20 px-3 py-2">
-              <p className="font-mono text-[11px] text-primary/90 leading-relaxed">
+            <div className="mt-2 rounded-lg bg-cyan-500/5 border border-cyan-500/15 px-3 py-2">
+              <p className="font-mono text-[11px] text-cyan-400/80 leading-relaxed">
                 {String(mlDetail)}
               </p>
             </div>
