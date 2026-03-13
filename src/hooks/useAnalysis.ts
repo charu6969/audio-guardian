@@ -156,7 +156,7 @@ const QUICK_STEPS = [
   "Extracting spectral features...",
   "Running biological signature analysis...",
   "Evaluating temporal coherence...",
-  "Running ML deepfake classifier...",
+  "Analyzing environmental consistency...",
 ];
 
 // ── Hook ──────────────────────────────────────────────────────────────────────

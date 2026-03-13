@@ -34,10 +34,10 @@ export function AnalysisModeSelector({ mode, onModeChange, className = "" }: Ana
             </div>
           </div>
           <p className="text-xs text-muted-foreground leading-relaxed mb-3">
-            Fast latency-optimized 3-layer scan: Biological Signature, Temporal Coherence, ML Deepfake
+            Fast human-centric latency-optimized scan: Biological Signature, Temporal Coherence, Environmental Consistency
           </p>
           <div className="space-y-1">
-            {["Biological Signature", "Temporal Coherence", "ML Deepfake"].map(layer => (
+            {["Biological Signature", "Temporal Coherence", "Environmental Consistency"].map(layer => (
               <div key={layer} className="flex items-center gap-2">
                 <div className="w-1.5 h-1.5 rounded-full bg-purple-400" />
                 <span className="font-mono text-[10px] text-muted-foreground">{layer}</span>

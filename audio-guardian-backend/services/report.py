@@ -90,7 +90,7 @@ def generate(analysis_result: dict) -> bytes:
 
     # Custom styles
     title_style = ParagraphStyle("title", parent=styles["Normal"],
-                                  fontSize=22, textColor=NAVY, spaceAfter=4,
+                                  fontSize=22, leading=26, textColor=NAVY, spaceAfter=8,
                                   fontName="Helvetica-Bold", alignment=TA_CENTER)
     subtitle_style = ParagraphStyle("subtitle", parent=styles["Normal"],
                                     fontSize=10, textColor=MID_GRAY, spaceAfter=2,

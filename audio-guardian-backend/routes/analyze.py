@@ -68,11 +68,11 @@ def _compute_trust_score(layers: list) -> int:
 
 
 def _compute_quick_trust_score(layers: list) -> int:
-    """Quick mode: Bio 35%, Temporal 20%, ML 45%"""
+    """Quick mode: Bio 45%, Temporal 30%, Environ 25%"""
     weights = {
-        "Biological Signature":   0.35,
-        "Temporal Coherence":     0.20,
-        "ML Deepfake Classifier": 0.45,
+        "Biological Signature":      0.45,
+        "Temporal Coherence":        0.30,
+        "Environmental Consistency": 0.25,
     }
     total_w, total_s = 0.0, 0.0
     for layer in layers:
@@ -96,18 +96,6 @@ def _determine_verdict(trust_score: int, layers: list) -> str:
         return "HIGH FRAUD RISK"
 
     # Standard path
-    ml_layer = next((l for l in layers if l["layer"] == "ML Deepfake Classifier"), None)
-    ml_score = ml_layer["score"] if ml_layer else trust_score
-
-    if trust_score >= 78 and n_fail == 0 and ml_score >= 65:
-        return "AUTHENTIC"
-    elif trust_score >= 62 and n_fail <= 1 and ml_score >= 55:
-        return "LIKELY AUTHENTIC"
-    elif trust_score >= 45 or (n_fail >= 2):
-        return "SUSPICIOUS"
-    elif trust_score >= 28:
-        return "LIKELY SYNTHETIC"
-    else:
         return "SYNTHETIC / MANIPULATED"
 
 
@@ -264,9 +252,9 @@ async def analyze_audio_quick(file: UploadFile = File(...)):
 
         # ── 3 fast layers (no Digital Integrity — it's too slow for quick) ────
         layers = [
-            _run_layer("Biological Signature",   biological.run,          y, sr),
-            _run_layer("Temporal Coherence",     temporal.run,             y, sr),
-            _run_layer("ML Deepfake Classifier", deepfake_classifier.run, y, sr),
+            _run_layer("Biological Signature",      biological.run,             y, sr),
+            _run_layer("Temporal Coherence",        temporal.run,               y, sr),
+            _run_layer("Environmental Consistency", environmental.run,          y, sr),
         ]
 
         trust_score = _compute_quick_trust_score(layers)
